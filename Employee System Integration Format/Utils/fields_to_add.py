@@ -17,5 +17,3 @@ class AgentStates:
         
 agent_states = AgentStates()
 
-git config --global user.name "ahmad-meda"
-git config --global user.email "ahmad04.meda@gmail.com"
