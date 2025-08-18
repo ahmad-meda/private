@@ -5,7 +5,7 @@ class AgentStates:
         ]
         self.optional_personal_fields = [
             # "emailId", "dateOfBirth", "gender"
-            "checkin_reminders", "is_employee_hr", "hr_employee_scope"
+            "reminders", "is_hr", "hr_scope"
         ]
         self.optional_employment_fields = [
             "department_name", "office_location_name",
@@ -16,3 +16,6 @@ class AgentStates:
         ]
         
 agent_states = AgentStates()
+
+git config --global user.name "ahmad-meda"
+git config --global user.email "ahmad04.meda@gmail.com"

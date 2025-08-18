@@ -81,7 +81,9 @@ def create_employee(contact_number:str, user_message:str):
 
     if extracted_data.full_name or extracted_data.work_policy_name or extracted_data.office_location_name or extracted_data.department_name or extracted_data.reporting_manager_name or extracted_data.role or extracted_data.company_name or extracted_data.gender :
         extracted_data.work_policy_name = find_best_match(user_input=extracted_data.work_policy_name, choices=EmployeeChoices.get_work_policy_choices(), threshold=85)
-        extracted_data.office_location_name = find_best_match(user_input=extracted_data.office_location_name, choices=EmployeeChoices.get_office_location_choices(), threshold=90)
+        # Do not fuzzy-match special sentinel values
+        if extracted_data.office_location_name not in ("manager_skip", "home_coordinates"):
+            extracted_data.office_location_name = find_best_match(user_input=extracted_data.office_location_name, choices=EmployeeChoices.get_office_location_choices(), threshold=90)
         extracted_data.department_name = find_best_match(user_input=extracted_data.department_name, choices=EmployeeChoices.get_departments_choices(), threshold=85)
         extracted_data.reporting_manager_name = find_best_match(user_input=extracted_data.reporting_manager_name, choices=EmployeeChoices.get_reporting_manager_choices(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=85)
         extracted_data.role = find_best_match(user_input=extracted_data.role, choices=EmployeeChoices.get_role_choices(), threshold=85)
@@ -122,7 +124,7 @@ def create_employee(contact_number:str, user_message:str):
                                                 hr_group_id=employee_record.group_id)
         
         #add reminders, is_hr, hr_scope to the session fields if they are extracted
-        if extracted_data.office_location_name == "manager_skip":
+        if extracted_data.office_location_name == "manager_skip" or extracted_data.office_location_name == "home_coordinates":
             EmployeeSessionProxy.add_to_list(contact_number=contact_number, items=["office_location_name"])
         if extracted_data.reminders is not None:
             EmployeeSessionProxy.add_to_list(contact_number=contact_number, items=["reminders"])
@@ -190,9 +192,9 @@ def create_employee(contact_number:str, user_message:str):
 
         
     
-    if current_field is None and len(remaining_fields) == 0:
+    if current_field is None and len(remaining_fields) == 0 and error_dict == {}:
         print("Adding in main database")
-        EmployeeProxy._add_employee_in_main_database(draft_id=draft_id)
+        print(f"adding in main database: ", EmployeeProxy._add_employee_in_main_database(draft_id=draft_id))
         EmployeeProxy._delete_draft(draft_id=draft_table_id)
         LeadMessageHistoryProxy.clear_message_history(contact_number)
         EmployeeSessionProxy.clear_list(contact_number=contact_number)
@@ -236,6 +238,7 @@ def create_employee(contact_number:str, user_message:str):
     print(f"Extraction Messages: {extraction_messages[-2:]}")
     print(f"Remaining Fields: {remaining_fields}")
     print(f"Explanations: {explanations}")
+    print(f"draft existed? : ",draft_existed)
     response = get_employee_details(messages=extraction_messages, fields=remaining_fields, error_dict=error_dict, explanations=explanations)
     LeadMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
     print(f"Assistant: {response.message_to_user}")
@@ -243,7 +246,7 @@ def create_employee(contact_number:str, user_message:str):
         
 while True:
     user_input = input("User: ")
-    create_employee(contact_number="+971502345678", user_message=user_input)
+    create_employee(contact_number="+971512345678", user_message=user_input)
 
        
 

@@ -20,7 +20,7 @@ class EmployeeData(BaseModel):
     work_policy_name: Optional[str] = None
     home_latitude: Optional[float] = None
     home_longitude: Optional[float] = None
-    office_location_name: Optional[str] = Field(description="The user can either provide the name of office location or provide the home coordinates or may refuse to give the office location (this is a privilege only for managers), so if they choose the manager-skip extract the office location as 'manager_skip'")
+    office_location_name: Optional[str] = Field(description="The user can either provide the name of office location or provide the home coordinates(if they choose this then extract the office location as 'home_coordinates') or may refuse to give the office location (this is a privilege only for managers), so if they choose the manager-skip extract the office location as 'manager_skip'")
     company_name: Optional[str] = None
     role: Optional[str] = None
     reporting_manager_name: Optional[str] = None
@@ -61,6 +61,11 @@ class UpdateEmployeeExtraction(BaseModel):
     role: Optional[str] = Field(None, options=EmployeeChoices.get_role_choices())
     reporting_manager_name: Optional[str] = None
     department_name: Optional[str] = None
+    restrict_to_allowed_locations: Optional[bool] = Field(description="This is True if the user wants multiple office locations for the employee.")
+    allow_site_checkin: Optional[bool] = Field(description="This is True if the employee is allowed to check-in from any location otherwise False.")
+    reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out.")
+    is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
+    hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'.")
 
 class LocateUpdateEmployeeResponse(BaseModel):
     current_phone_number: Optional[str] = None
@@ -135,3 +140,9 @@ class EmployeeUpdateFields(BaseModel):
     role: Optional[bool] = False
     reporting_manager_name: Optional[bool] = False
     department_name: Optional[bool] = False
+    restrict_to_allowed_locations: Optional[bool] = Field(description="This is True if the user wants multiple office locations for the employee.")
+    allow_site_checkin: Optional[bool] = Field(description="This is True if the employee is allowed to check-in from any location otherwise False.")
+    reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out.")
+    is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
+    hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'.")
+    

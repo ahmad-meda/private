@@ -205,6 +205,8 @@ class EmployeeProxy:
                                allow_site_checkin: bool,
                                restrict_to_allowed_locations: bool,
                                reminders: bool,
+                               is_hr: bool,
+                               hr_scope: str,
                                hr_company_id: int,
                                hr_group_id: int):
         from app import app, db
@@ -224,6 +226,7 @@ class EmployeeProxy:
                                                       home_latitude, home_longitude,
                                                       allow_site_checkin, restrict_to_allowed_locations,
                                                       reminders,
+                                                      is_hr, hr_scope,
                                                       hr_company_id, hr_group_id)
     
     @staticmethod

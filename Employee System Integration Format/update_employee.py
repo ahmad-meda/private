@@ -58,7 +58,9 @@ def update_employee_fields(contact_number:str, user_message:str):
     if employee_identified == True:
         if extracted_data.work_policy_name or extracted_data.office_location_name or extracted_data.department_name or extracted_data.reporting_manager_name or extracted_data.role or extracted_data.company_name or extracted_data.full_name or extracted_data.gender:
             extracted_data.work_policy_name = find_best_match(user_input=extracted_data.work_policy_name, choices=EmployeeChoices.get_work_policy_choices(), threshold=85)
-            extracted_data.office_location_name = find_best_match(user_input=extracted_data.office_location_name, choices=EmployeeChoices.get_office_location_choices(), threshold=85)
+            # Do not fuzzy-match special sentinel values
+            if extracted_data.office_location_name not in ("manager_skip", "home_coordinates"):
+                extracted_data.office_location_name = find_best_match(user_input=extracted_data.office_location_name, choices=EmployeeChoices.get_office_location_choices(), threshold=85)
             extracted_data.department_name = find_best_match(user_input=extracted_data.department_name, choices=EmployeeChoices.get_departments_choices(), threshold=85)
             extracted_data.reporting_manager_name = find_best_match(user_input=extracted_data.reporting_manager_name, choices=EmployeeChoices.get_reporting_manager_choices(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=85)
             extracted_data.role = find_best_match(user_input=extracted_data.role, choices=EmployeeChoices.get_role_choices(), threshold=85)
@@ -129,6 +131,11 @@ def update_employee_fields(contact_number:str, user_message:str):
                                                     gender=extracted_data.gender, 
                                                     home_latitude=extracted_data.home_latitude, 
                                                     home_longitude=extracted_data.home_longitude,
+                                                    allow_site_checkin=extracted_data.allow_site_checkin,
+                                                    restrict_to_allowed_locations=extracted_data.restrict_to_allowed_locations,
+                                                    reminders=extracted_data.reminders,
+                                                    is_hr=extracted_data.is_hr,
+                                                    hr_scope=extracted_data.hr_scope,
                                                     hr_company_id=employee_record.company_id,
                                                     hr_group_id=employee_record.group_id)
             print(f"Result: {result}")

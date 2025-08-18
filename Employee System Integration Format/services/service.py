@@ -343,11 +343,11 @@ class EmployeeService:
                     error_dict['work_policy_name'] = 'Work policy not found, please clarify. present choices to user. here are the options: ' + ', '.join(EmployeeService.get_work_policy_choices(db_session))
             
             office_location_id = None
-            if office_location_name is not None or office_location_name == 'manager_skip':
+            if office_location_name is not None or office_location_name != 'manager_skip' or office_location_name != 'home_coordinates':
                 office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
                 if office_location_id is None:
                   
-                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_office_location_choices(db_session))
+                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_companies_by_group_and_company(db_session, hr_group_id, hr_company_id))
             
             department_id = None
             if department_name is not None:
@@ -486,7 +486,6 @@ class EmployeeService:
                 department_id=draft_employee.department_id,
                 is_hr=draft_employee.is_hr,
                 hr_scope=draft_employee.hr_scope,
-                checkin_reminders=draft_employee.checkin_reminders,
                 allow_site_checkin=draft_employee.allow_site_checkin,
                 restrict_to_allowed_locations=draft_employee.restrict_to_allowed_locations,
                 reminders=draft_employee.reminders,
@@ -529,6 +528,8 @@ class EmployeeService:
         allow_site_checkin: Optional[bool] = None,
         restrict_to_allowed_locations: Optional[bool] = None,
         reminders: Optional[bool] = None,
+        is_hr: Optional[bool] = None, # this is for the employee being added is an HR
+        hr_scope: Optional[str] = None,
         hr_company_id: int = None,
         hr_group_id: int = None
         ) -> Dict[str, Any]:
@@ -629,7 +630,7 @@ class EmployeeService:
             if office_location_name is not None:
                 office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
                 if office_location_id is None:
-                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_office_location_choices(db_session))
+                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_companies_by_group_and_company(db_session, hr_group_id, hr_company_id))
             
             department_id = None
             if department_name is not None:
@@ -689,6 +690,16 @@ class EmployeeService:
                 employee.home_latitude = str(home_latitude)
             if home_longitude is not None:
                 employee.home_longitude = str(home_longitude)
+            if allow_site_checkin is not None:
+                employee.allow_site_checkin = allow_site_checkin
+            if restrict_to_allowed_locations is not None:
+                employee.restrict_to_allowed_locations = restrict_to_allowed_locations
+            if reminders is not None:
+                employee.reminders = reminders
+            if is_hr is not None:
+                employee.is_hr = is_hr
+            if hr_scope is not None:
+                employee.hr_scope = hr_scope
             
             # Update foreign key references
             if company_id is not None:

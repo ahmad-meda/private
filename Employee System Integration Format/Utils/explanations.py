@@ -55,17 +55,11 @@ class Explanations:
 
     ADD_EMPLOYEE_ONBOARDING: Final[str] = (
         """
-        give the user a bit of explanation on what each field is and a small example.
+        give the user a bit of explanation on what each field is. Only explain the fields given to you.
 
-        Example:
+        Here is an example:
+
         Full Name: The Full name of the employee , e.g. John Doe
-        Contact Number: The contat number of the employee with a valid country code and length. e.g. +971501234567
-        Company Name: The name of the company where the employee works. e.g. ABC Company
-        Role: The role of the employee in the company. e.g. HR Manager
-        Work Policy Name: The name of the work policy of the employee. e.g. ABC Policy
-        Office Location Name: (mention the options for ofice location)
-        Department Name: The department of the employee in the company. e.g. HR Department
-        Reporting Manager Name: The person the employee will be reporting to.
         """
     )
 
