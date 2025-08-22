@@ -182,7 +182,7 @@ class EmployeeDraft(db.Model):
     created_by = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
-        return f"<EmployeeDraft(id={self.id}, name='{self.name}', department='{self.department.name if self.department else None}')>"
+        return f"<EmployeeDraft(id={self.id}, name='{self.name}')>"
 
 class Company(db.Model):
     __tablename__ = "companies"
@@ -355,3 +355,59 @@ class SessionState(db.Model):
         return f"<SessionState(contact_number='{self.contact_number}', key='{self.session_key}', value='{self.session_value}')>"
     
 
+class LeavePolicy(db.Model):
+    _tablename_ = 'leave_policies'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+
+    request_type = db.Column(db.String, nullable=False)
+    max_days = db.Column(db.Integer, nullable=False)  # Max leave days per year
+    min_service_days = db.Column(db.Integer, nullable=False)  # When leave becomes available
+    notice_period = db.Column(db.String, nullable=True)  # Notice period requirements
+    documentation_required = db.Column(db.Boolean, default=False)  # Proof required?
+    clubbing_rules = db.Column(db.String, nullable=True)  # Allowed to be combined?
+
+    def _repr_(self):
+        return f"<LeavePolicy {self.request_type}>"
+
+class LeaveBalance(db.Model):
+    _tablename_ = 'leave_balances'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employeenew.id'), nullable=False)
+    request_type = db.Column(db.String, db.ForeignKey('leave_policies.request_type'), nullable=False)
+    balance = db.Column(db.Float, nullable=False)  # Remaining leave balance (supports half-day: 0.5)
+
+    # ✅ Correct relationship referenceF
+    employee = db.relationship("Employee", back_populates="leave_balances")
+    policy = db.relationship("LeavePolicy", backref="leave_balances")
+
+    def _repr_(self):
+        return f"<LeaveBalance {self.request_type} - {self.balance} days>"
+
+class LeaveRequest(db.Model):
+    _tablename_ = 'leave_requests'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employeenew.id'))
+    request_type = db.Column(db.String, db.ForeignKey('leave_policies.request_type'))
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    duration = db.Column(db.Float, nullable=True)  # Supports half-day (0.5) leave
+    # request_type IN ('LEAVE','WFH','REMOTE','ONSITE','TRAVEL')
+    status = db.Column(db.String, default="Pending")  # Pending, Approved, Rejected
+    reason = db.Column(db.String, nullable=True)
+    requires_approval = db.Column(db.Boolean, default=False)  # If policy requires approval
+    is_half_day = db.Column(db.Boolean, default=False)  # Flag for half-day leave
+    created_at = db.Column(DateTime, default=datetime.utcnow())
+    # ✅ Correct relationships
+    employee = db.relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+        back_populates="leave_requests"
+    )
+    policy = db.relationship("LeavePolicy", backref="leave_requests")
+
+    def _repr_(self):
+        return f"<LeaveRequest {self.request_type} ({self.status})>"

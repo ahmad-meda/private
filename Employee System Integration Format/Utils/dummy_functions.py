@@ -7,3 +7,6 @@ def generate_llm_response(company_id, employees, query, mobile_number):
 
 def sendLLMResponse(sender_employee, generate_llm_response):
     print(f"Sending LLM response to {generate_llm_response.mobile_number}: {generate_llm_response}")
+
+def clear_session(contact_number):
+    return contact_number

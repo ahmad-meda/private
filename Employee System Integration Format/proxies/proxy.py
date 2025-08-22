@@ -1,7 +1,19 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from services.service import EmployeeService
 
 class EmployeeProxy:
+
+    @staticmethod
+    def get_employee_draft_record_by_id(employee_id):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employee_draft_record_by_id(employee_id, db.session)
+
+    @staticmethod
+    def get_employee_record_by_id(employee_id):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employee_record_by_id(employee_id, db.session)
 
     @staticmethod
     def get_employee_record(contact_number: str):
@@ -94,10 +106,10 @@ class EmployeeProxy:
             return EmployeeService.update_employee_company(employee_id, company_id, db.session)
     
     @staticmethod
-    def get_company_id_by_name(company_name: str):
+    def get_company_id_by_name(company_name: str, hr_group_id: int = None, hr_company_id: int = None):
         from app import app, db
         with app.app_context():
-            return EmployeeService.get_company_id_by_name(company_name, db.session)
+            return EmployeeService.get_company_id_by_name(company_name, db.session, hr_group_id, hr_company_id)
     
     @staticmethod
     def get_role_id_by_name(role_name: str):
@@ -390,4 +402,10 @@ class EmployeeProxy:
         from app import app, db
         with app.app_context():
             return EmployeeService.get_companies_by_group_and_company(db.session, group_id, company_id)
+        
+    @staticmethod
+    def save_employee_office_locations(employee_id: int, office_location_names: list):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.save_employee_office_locations(employee_id, office_location_names, db.session)
         

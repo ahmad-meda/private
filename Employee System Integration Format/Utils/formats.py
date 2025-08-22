@@ -30,6 +30,7 @@ class EmployeeData(BaseModel):
     reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out.")
     is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
     hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'.")
+    multiple_office_locations_to_check_in: Optional[List[str]] = Field(description="This is a list of office locations to check-in from. The user will give names of the office locations to check-in from.")
 
 class SoftDeleteExtraction(BaseModel):
     employee_name: Optional[str] = None

@@ -72,4 +72,9 @@ class EmployeeSessionService:
         key = f"contact:{contact_number}:messages"
         messages = self.redis_client.lrange(key, 0, -1)
         return [json.loads(msg) for msg in messages]
+    
+    def clear_messages(self, contact_number: str):
+        """Clear all messages for a given contact number"""
+        key = f"contact:{contact_number}:messages"
+        self.redis_client.delete(key)
 

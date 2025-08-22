@@ -15,6 +15,30 @@ from Utils.contact_validation import is_valid_international
 class EmployeeService:
 
     @staticmethod
+    def get_employee_draft_record_by_id(employee_id: int, db_session: Session):
+        try:
+            employee = db_session.query(EmployeeDraft).filter(
+                EmployeeDraft.id == employee_id
+            ).first()
+            if employee is None:
+                raise ValueError(f"No employee found with id: {employee_id}")
+            return employee
+        except Exception as e:
+            raise Exception(f"Error retrieving employee by employee id {employee_id}: {str(e)}")
+        
+    @staticmethod
+    def get_employee_record_by_id(employee_id: int, db_session: Session):
+        try:
+            employee = db_session.query(Employee).filter(
+                Employee.id == employee_id
+            ).first()
+            if employee is None:
+                raise ValueError(f"No employee found with id: {employee_id}")
+            return employee
+        except Exception as e:
+            raise Exception(f"Error retrieving employee by employee id {employee_id}: {str(e)}")
+
+    @staticmethod
     def get_employee_record(contact_number: str, db_session: Session):
         #gets all the record of the employee based on their contact number
         contact_number = None if contact_number is None else re.sub(r'[^\d]', '', str(contact_number))
@@ -172,10 +196,26 @@ class EmployeeService:
         
     
     @staticmethod
-    def get_company_id_by_name(company_name: str, db:Session) -> Optional[int]:
-        """Get company ID by name using SQLAlchemy ORM"""
+    def get_company_id_by_name(company_name: str, db:Session, hr_group_id: int = None, hr_company_id: int = None) -> Optional[int]:
+        """Get company ID by name using SQLAlchemy ORM with HR access filtering"""
         try:
-            company = db.query(Company).filter(Company.name == company_name).first()
+            # Filter companies based on HR's access level
+            if hr_group_id is not None:
+                # If HR has a group_id, filter companies by that group
+                company = db.query(Company).filter(
+                    Company.name == company_name,
+                    Company.group_id == hr_group_id
+                ).first()
+            elif hr_company_id is not None:
+                # If HR doesn't have a group_id but has a company_id, filter by that company
+                company = db.query(Company).filter(
+                    Company.name == company_name,
+                    Company.id == hr_company_id
+                ).first()
+            else:
+                # If no filtering parameters provided, return None for security
+                return None
+            
             return company.id if company else None
         except Exception:
             return None
@@ -304,7 +344,7 @@ class EmployeeService:
             # Look up related entities and validate they exist using existing static methods
             company_id = None
             if company_name is not None:
-                company_id = EmployeeService.get_company_id_by_name(company_name, db_session)
+                company_id = EmployeeService.get_company_id_by_name(company_name, db_session, hr_group_id, hr_company_id)
 
                 if company_id is None:
                     error_dict['company_name'] = 'Company not found, please clarify. present choices to user. here are the options: ' + ', '.join(EmployeeService.get_company_choices(db_session, hr_group_id, hr_company_id))
@@ -343,7 +383,7 @@ class EmployeeService:
                     error_dict['work_policy_name'] = 'Work policy not found, please clarify. present choices to user. here are the options: ' + ', '.join(EmployeeService.get_work_policy_choices(db_session))
             
             office_location_id = None
-            if office_location_name is not None or office_location_name != 'manager_skip' or office_location_name != 'home_coordinates':
+            if office_location_name is not None and office_location_name != 'manager_skip' and office_location_name != 'home_coordinates':
                 office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
                 if office_location_id is None:
                   
@@ -429,6 +469,9 @@ class EmployeeService:
                 employee_draft.department_id = department_id
             if reporting_manager_id is not None:
                 employee_draft.reporting_manager_id = reporting_manager_id
+            # Note: Office location restrictions are handled after draft is published to main employee table
+            # if multiple_office_locations_to_check_in is not None:
+            #     EmployeeService.save_employee_office_locations(employee_db_id, multiple_office_locations_to_check_in, db_session)
             
             # Update dates
             if date_of_joining is not None:
@@ -589,7 +632,7 @@ class EmployeeService:
             # Look up related entities and validate they exist using existing static methods
             company_id = None
             if company_name is not None:
-                company_id = EmployeeService.get_company_id_by_name(company_name, db_session)
+                company_id = EmployeeService.get_company_id_by_name(company_name, db_session, hr_group_id, hr_company_id)
 
                 if company_id is None:
                     error_dict['company_name'] = 'Company not found, please clarify. present choices to user. here are the options: ' + ', '.join(EmployeeService.get_company_choices(db_session, hr_group_id, hr_company_id))
@@ -1447,7 +1490,7 @@ class EmployeeService:
     def get_employee_by_company(db: Session, company_name: str, hr_company_id: int = None, group_id: int = None):
         try:
             company_name = find_best_match(company_name, EmployeeService.get_company_choices(db, group_id, hr_company_id), threshold=85)
-            company_id = EmployeeService.get_company_id_by_name(company_name, db)
+            company_id = EmployeeService.get_company_id_by_name(company_name, db, hr_group_id=group_id, hr_company_id=hr_company_id)
             if not company_id:
                 return "", {"error": f"Company '{company_name}' not found."}
                 
@@ -1664,7 +1707,7 @@ class EmployeeService:
 
                 elif field == "company_name":
                     matched_company = find_best_match(value, EmployeeService.get_company_choices(db, group_id, hr_company_id), threshold=85)
-                    company_id = EmployeeService.get_company_id_by_name(matched_company, db)
+                    company_id = EmployeeService.get_company_id_by_name(matched_company, db, hr_group_id=group_id, hr_company_id=hr_company_id)
                     if not company_id:
                         return "", {"error": f"Company '{value}' not found."}
                     query = query.filter(Employee.company_id == company_id)
@@ -1699,7 +1742,7 @@ class EmployeeService:
                         return "", {"error": "Invalid date format. Please use YYYY-MM-DD."}
                     
                 elif field == "office_location_name":
-                    matched_location = find_best_match(value, EmployeeService.get_office_location_choices(db), threshold=85)
+                    matched_location = find_best_match(value, EmployeeService.get_companies_by_group_and_company(db, group_id, hr_company_id), threshold=85)
                     location_id = EmployeeService.get_office_location_id_by_name(matched_location, db)
                     if not location_id:
                         return "", {"error": f"Office location '{value}' not found."}
@@ -1757,14 +1800,13 @@ class EmployeeService:
     @staticmethod
     def get_companies_by_group_and_company(db: Session, group_id: Optional[int], company_id: int) -> List[str]:
         if group_id is not None:
-            # Filter by both group and company
+            # Get offices for ALL companies in the group
             offices = db.query(OfficeLocation).join(Company).filter(
                 Company.group_id == group_id,
-                Company.id == company_id,
                 OfficeLocation.is_active == True
             ).all()
         else:
-            # Filter by company only
+            # Filter by company only when group is null
             offices = db.query(OfficeLocation).filter(
                 OfficeLocation.company_id == company_id,
                 OfficeLocation.is_active == True
@@ -1772,3 +1814,83 @@ class EmployeeService:
         
         return [o.name for o in offices]
             
+    @staticmethod
+    def save_employee_office_locations(employee_id: int, office_location_names: list, db: Session) -> Dict[str, Any]:
+    
+        error_dict = {}
+        
+        try:
+            # Get the employee draft (since this is during creation process)
+            employee = db.query(EmployeeDraft).get(employee_id)
+            
+            if not employee:
+                error_dict['employee'] = f"Employee draft {employee_id} not found"
+                return {'success': False, 'errors': error_dict}
+            
+            # Get valid office location options for this employee
+            valid_options = EmployeeService.get_companies_by_group_and_company(db, employee.group_id, employee.company_id)
+            total_available_offices = len(valid_options)
+            
+            # Remove the restriction that prevents setting multiple office locations when only 1 is available
+            # This was causing issues when users wanted to set specific office locations
+            # The validation below will handle invalid office locations properly
+            
+            # Validate each office location individually
+            valid_office_locations = []
+            invalid_office_locations = []
+            
+            for office_name in office_location_names:
+                # Check if the office location exists and is active
+                if employee.group_id is not None:
+                    # Check in all companies in the employee's group
+                    office_location = db.query(OfficeLocation).join(Company).filter(
+                        OfficeLocation.name == office_name,
+                        Company.group_id == employee.group_id,
+                        OfficeLocation.is_active == True
+                    ).first()
+                else:
+                    # Check only in the employee's company
+                    office_location = db.query(OfficeLocation).filter(
+                        OfficeLocation.name == office_name,
+                        OfficeLocation.company_id == employee.company_id,
+                        OfficeLocation.is_active == True
+                    ).first()
+                
+                if office_location:
+                    valid_office_locations.append(office_location)
+                else:
+                    invalid_office_locations.append(office_name)
+            
+            # If any office locations are invalid, return error
+            if invalid_office_locations:
+                error_dict['invalid_office_locations'] = invalid_office_locations
+                error_dict['valid_options'] = valid_options
+                return {'success': False, 'errors': error_dict}
+            
+            # If no valid office locations provided, return error
+            if not valid_office_locations:
+                error_dict['office_locations'] = "No valid office locations provided"
+                error_dict['valid_options'] = valid_options
+                return {'success': False, 'errors': error_dict}
+            
+            # Clear old locations and add new ones
+            employee.allowed_office_locations.clear()
+            employee.allowed_office_locations.extend(valid_office_locations)
+            
+            # Turn on the restriction
+            employee.restrict_to_allowed_locations = True
+            
+            # Save to database
+            db.commit()
+            
+            return {
+                'success': True, 
+                'errors': {},
+                'message': f"Saved {len(valid_office_locations)} out of {total_available_offices} available locations for employee {employee_id}",
+                'allowed_locations': [loc.name for loc in valid_office_locations]
+            }
+            
+        except Exception as e:
+            db.rollback()
+            error_dict['general'] = f"An unexpected error occurred: {str(e)}"
+            return {'success': False, 'errors': error_dict}

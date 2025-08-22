@@ -3,8 +3,8 @@ from proxies.proxy import EmployeeProxy
 class EmployeeChoices:
 
     @staticmethod
-    def get_office_location_choices():
-        return EmployeeProxy.get_office_location_choices()
+    def get_office_location_choices(group_id: int, company_id: int):
+        return EmployeeProxy.get_companies_by_group_and_company(group_id=group_id, company_id=company_id)
     
     @staticmethod
     def get_role_choices():

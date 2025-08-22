@@ -44,8 +44,11 @@ def extract_data(messages):
                 "role": "system",
                 "content": (
 
-                    """You are a data extraction assistant being used to add an employee in the db. 
-                    From this conversation, extract the confirmed employee info as structured data.
+                    """You are a data extraction assistant being used to extract data given by the user about an employee. 
+                    
+                    Only extract data that was explicitly provided by the user in the conversation. DO NOT invent, assume, or hallucinate any data that was not mentioned by the user. If a field was not provided by the user, leave it as null/None.
+                    
+                    From this conversation, extract ONLY the employee info that was actually given by the user as structured data.
                     date as postgres format (YYYY-MM-DD)
                     name saved in professional format(upper and lower case)
                     """

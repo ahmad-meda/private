@@ -58,3 +58,8 @@ class EmployeeSessionProxy:
     def get_messages(cls, contact_number):
         """Get all messages for a given contact number"""
         return cls._service.get_messages(contact_number)
+    
+    @classmethod
+    def clear_messages(cls, contact_number):
+        """Clear all messages for a given contact number"""
+        return cls._service.clear_messages(contact_number)
