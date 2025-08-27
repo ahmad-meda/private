@@ -233,7 +233,16 @@ def create_employee(contact_number:str, user_message:str):
     # If there are no fields left to add and there are no errors to report then end the add employee agent interaction.
     if current_field is None and len(remaining_fields) == 0 and error_dict == {}:
         print("Adding in main database")
-        print(f"adding in main database: ", EmployeeProxy._add_employee_in_main_database(draft_id=draft_id))
+        add_result = EmployeeProxy._add_employee_in_main_database(draft_id=draft_id)
+        print(f"adding in main database: ", add_result)
+        
+        # Create leave balances for the newly created employee
+        if "new_employee_id" in add_result:
+            new_employee_id = add_result["new_employee_id"]
+            print(f"Creating leave balances for employee ID: {new_employee_id}")
+            leave_balance_result = EmployeeProxy.create_leave_balances_for_employee(employee_id=new_employee_id)
+            print(f"Leave balance creation result: {leave_balance_result}")
+        
         LeadMessageHistoryProxy.clear_message_history(contact_number)
         EmployeeSessionProxy.clear_list(contact_number=contact_number) # clear the redis message history after the employee has been successfully added
 

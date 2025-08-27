@@ -1,7 +1,8 @@
 import re
+import bcrypt
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from Files.SQLAlchemyModels import Attendance, Company, Department, Employee, Draft, Group, OfficeLocation, Role, WorkPolicy, EmployeeDraft
+from Files.SQLAlchemyModels import Attendance, Company, Department, Employee, Draft, Group, OfficeLocation, Role, WorkPolicy, EmployeeDraft, LeaveBalance, HuseApp
 from datetime import datetime
 from typing import Tuple, List, Optional, Dict, Any
 from fuzzywuzzy import process
@@ -123,9 +124,19 @@ class EmployeeService:
             raise Exception(f"Error adding created_by to draft for employee {employee_record_id}: {str(e)}")
         
     @staticmethod
-    def get_all_employee_names(db: Session):
+    def get_all_employee_names(db: Session, hr_company_id: int = None, hr_group_id: int = None):
         try:
-            names = db.query(Employee.name).filter(Employee.is_deleted == False).all()
+            # Filter employees based on HR's access level
+            query = db.query(Employee.name).filter(Employee.is_deleted == False)
+            
+            if hr_group_id is not None:
+                # If HR has a group_id, filter employees by that group
+                query = query.filter(Employee.group_id == hr_group_id)
+            elif hr_company_id is not None:
+                # If HR doesn't have a group_id but has a company_id, filter by that company
+                query = query.filter(Employee.company_id == hr_company_id)
+            
+            names = query.all()
             return [name[0] for name in names if name[0] not in (None, '')]
         
         except Exception as e:
@@ -1894,3 +1905,189 @@ class EmployeeService:
             db.rollback()
             error_dict['general'] = f"An unexpected error occurred: {str(e)}"
             return {'success': False, 'errors': error_dict}
+    
+    @staticmethod
+    def create_leave_balances_for_employee(employee_id: int, db: Session) -> Dict[str, Any]:
+        """
+        Create leave balance records for a newly created employee with 0 balance for all leave types.
+        
+        Args:
+            employee_id: The ID of the employee to create leave balances for
+            db: Database session
+            
+        Returns:
+            Dict containing success status and any errors
+        """
+        error_dict = {}
+        
+        # Define the 10 leave types as specified in REQUEST_CATEGORIES
+        leave_types = [
+            "Sick Leave",
+            "Casual Leave", 
+            "Annual / Privileged Leave",
+            "Bereavement Leave",
+            "Paternity Leave",
+            "Maternity Leave",
+            "Comp-Off",
+            "WFH",
+            "REMOTE",
+            "TRAVEL"
+        ]
+        
+        try:
+            # Check if employee exists
+            employee = db.query(Employee).get(employee_id)
+            if not employee:
+                error_dict['employee'] = f"Employee {employee_id} not found"
+                return {'success': False, 'errors': error_dict}
+            
+            # Check if leave balances already exist for this employee
+            existing_balances = db.query(LeaveBalance).filter(
+                LeaveBalance.employee_id == employee_id
+            ).all()
+            
+            if existing_balances:
+                error_dict['leave_balances'] = f"Leave balances already exist for employee {employee_id}"
+                return {'success': False, 'errors': error_dict}
+            
+            # Create leave balance records for each leave type
+            leave_balance_records = []
+            for leave_type in leave_types:
+                leave_balance = LeaveBalance(
+                    employee_id=employee_id,
+                    request_type=leave_type,
+                    balance=0.0,  # Initialize with 0 balance as requested
+                    # created_at and updated_at will be set automatically by the model
+                )
+                leave_balance_records.append(leave_balance)
+            
+            # Add all records to the session
+            db.add_all(leave_balance_records)
+            db.commit()
+            
+            return {
+                'success': True,
+                'errors': {},
+                'message': f"Created {len(leave_types)} leave balance records for employee {employee_id}",
+                'leave_types_created': leave_types
+            }
+            
+        except Exception as e:
+            db.rollback()
+            error_dict['general'] = f"An unexpected error occurred: {str(e)}"
+            return {'success': False, 'errors': error_dict}
+
+    @staticmethod
+    def check_username_exists(db_session: Session, username: str) -> bool:
+        """
+        Check if username already exists in the HuseApp table.
+        
+        Args:
+            db_session: SQLAlchemy database session
+            username: Username to check
+            
+        Returns:
+            True if username exists, False otherwise
+        """
+        try:
+            existing_user = db_session.query(HuseApp).filter(
+                HuseApp.app_username == username
+            ).first()
+            
+            return existing_user is not None
+        except Exception as e:
+            print(f"Error checking username existence: {e}")
+            return False
+
+    @staticmethod
+    def check_password_exists(db_session: Session, plain_password: str) -> bool:
+        """
+        Check if password already exists in the HuseApp table (by comparing hashes).
+        
+        Args:
+            db_session: SQLAlchemy database session
+            plain_password: Plain text password to check
+            
+        Returns:
+            True if password exists, False otherwise
+        """
+        try:
+            
+            # Get all stored passwords and verify against each one
+            stored_passwords = db_session.query(HuseApp.app_password).all()
+            
+            for (stored_hash,) in stored_passwords:
+                try:
+                    if bcrypt.checkpw(plain_password.encode('utf-8'), stored_hash.encode('utf-8')):
+                        return True
+                except:
+                    continue
+            
+            return False
+        except Exception as e:
+            print(f"Error checking password existence: {e}")
+            return False
+        
+    @staticmethod
+    def add_employee_to_huse(huse_app_id: int, app_username: str, app_password: str, db: Session) -> Dict[str, Any]:
+        """
+        Add an employee to the HuseApp table.
+        
+        Args:
+            huse_app_id: HuseApp ID of that particular Employee.
+            app_username: Username for the Employee to login to HuseApp
+            app_password: Password for the Employee to login to HuseApp
+            db: Database session
+
+        Returns:
+            Dict containing success status and any errors
+        """
+        
+        error_dict = {}
+        
+        try:
+            # Check if this huse_app_id already exists for an employee
+            existing_record = db.query(HuseApp).filter(HuseApp.huse_app_id == huse_app_id).first()
+            if existing_record:
+                error_dict['huse_app_id'] = f"HuseApp ID {huse_app_id} already exists in the database"
+                return {'success': False, 'errors': error_dict}
+            
+            # Check if username already exists
+            if EmployeeService.check_username_exists(db, app_username):
+                error_dict['username'] = f"Username '{app_username}' already exists in the database"
+                return {'success': False, 'errors': error_dict}
+            
+            # Check if password already exists
+            if EmployeeService.check_password_exists(db, app_password):
+                error_dict['password'] = f"Password already exists in the database"
+                return {'success': False, 'errors': error_dict}
+            
+            # Hash the password before storing
+            hashed_password = bcrypt.hashpw(app_password.encode('utf-8'), bcrypt.gensalt())
+            
+            # Create new HuseApp record (id will be auto-incremented)
+            huse_app_record = HuseApp(
+                huse_app_id=huse_app_id,
+                app_username=app_username,
+                app_password=hashed_password.decode('utf-8')
+            )
+            
+            # Add to database
+            db.add(huse_app_record)
+            db.commit()
+            
+            return {
+                'success': True,
+                'errors': {},
+                'message': f"Successfully added employee with HuseApp ID {huse_app_id} to database",
+                'database_id': huse_app_record.id,  # Auto-generated primary key
+                'huse_app_id': huse_app_id,
+                'app_username': app_username
+            }
+            
+        except Exception as e:
+            db.rollback()
+            error_dict['general'] = f"An unexpected error occurred: {str(e)}"
+            return {'success': False, 'errors': error_dict}
+        
+            

@@ -53,17 +53,24 @@ def update_employee_fields(contact_number:str, user_message:str):
     messages = LeadMessageHistoryProxy.get_message_history(contact_number)
     extraction_messages = sanitize_messages(messages)
 
-    # Filter out assistant messages to prevent hallucination - only use user messages for extraction
-    user_messages = [msg for msg in session_messages if msg.get("role") == "user"]
-    
     # Always extract current data for employee identification
-    sanitized_messages = sanitize_messages(user_messages[-2:])
+    sanitized_messages = sanitize_messages(session_messages[-2:])
+
+    does_user_want_to_exit = update_employee_end_response(messages=session_messages)
+    if does_user_want_to_exit.does_user_want_end_interaction is True:
+        print(f"User wants to exit: {does_user_want_to_exit.farwell_message_to_user}")
+        LeadMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.farwell_message_to_user)
+        send_whatsapp_message(contact_number, does_user_want_to_exit.farwell_message_to_user)
+        EmployeeSessionProxy.clear_employee_session(contact_number)
+        EmployeeSessionProxy.clear_messages(contact_number)
+        clear_session(contact_number)
+        return
+
     if employee_identified is False:
-        extracted_current_data = locate_update_employee(messages=user_messages)
+        extracted_current_data = locate_update_employee(messages=session_messages)
     
     # Extracted data after the employee has been identified.
-    # Only use user messages to prevent the AI from being influenced by assistant responses
-    extracted_data = update_employee_extraction(messages=user_messages[-2:])
+    extracted_data = update_employee_extraction(messages=session_messages[-2:])
 
     # Fuzzy logic to find the best match for the extracted data.
     if employee_identified == True:
@@ -85,12 +92,14 @@ def update_employee_fields(contact_number:str, user_message:str):
 
         # If the employee name is extracted, we need to find the best match for the employee name.
         if extracted_current_data.current_name and employee_identified == False:
-            matched_name = find_best_match(user_input=extracted_current_data.current_name, choices=EmployeeChoices.get_all_employee_names(), threshold=85)
+            matched_name = find_best_match(user_input=extracted_current_data.current_name, choices=EmployeeChoices.get_all_employee_names(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=95)
             # Get the employee id by name.
             employee_name = EmployeeProxy.get_employee_id_by_name(
                 name=matched_name,
                 email=extracted_current_data.current_email,
-                contact_number=extracted_current_data.current_phone_number
+                contact_number=extracted_current_data.current_phone_number,
+                hr_group_id=employee_record.group_id,
+                hr_company_id=employee_record.company_id
             )
             if employee_name["success"] == False and employee_name["matches"] != []:
                 print(f"Multiple Matches Found: {employee_name['matches']}")
@@ -107,7 +116,7 @@ def update_employee_fields(contact_number:str, user_message:str):
                 
         # If the employee phone number is extracted, we identify the employee based on the phone number.
         if extracted_current_data.current_phone_number and employee_identified == False:
-            employee_contact_result = EmployeeProxy.get_employee_id_by_contact(contact_number=extracted_current_data.current_phone_number)
+            employee_contact_result = EmployeeProxy.get_employee_id_by_contact(contact_number=extracted_current_data.current_phone_number, hr_group_id=employee_record.group_id, hr_company_id=employee_record.company_id)
             if employee_contact_result["success"] == False:
                 print(f"Error: {employee_contact_result['error']}")
                 error_dict = {employee_contact_result["error"]}
@@ -204,4 +213,4 @@ def update_employee_fields(contact_number:str, user_message:str):
 
 while True:
     user_input = input("User: ")
-    update_employee_fields(contact_number="+971512345678", user_message=user_input)
+    update_employee(contact_number="+971509784398", user_message=user_input)

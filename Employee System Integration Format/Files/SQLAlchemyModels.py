@@ -1,7 +1,7 @@
 from sqlalchemy import Double, Float, create_engine, Column, Integer, String, DateTime, Boolean, Text, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 
@@ -280,30 +280,7 @@ class Draft(db.Model):
     def __repr__(self):
         return f"<Draft(id={self.id}, draft_id='{self.draft_id}', draft_type='{self.draft_type}')>"
     
-class LeaveRequest(db.Model):
-    __tablename__ = 'leave_requests'
-    
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    employee_id = db.Column(db.Integer, ForeignKey('employee.id'), nullable=False)
-    
-    # Relationship back to Employee
-    employee = relationship('Employee', back_populates='leave_requests')
-    def __repr__(self):
-        return f"<LeaveRequest(id={self.id}, employee_id={self.employee_id})>"
 
-
-class LeaveBalance(db.Model):
-    __tablename__ = 'leave_balances'
-    
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    employee_id = db.Column(db.Integer, ForeignKey('employee.id'), nullable=False)
-
-    # Relationship back to Employee
-    employee = relationship('Employee', back_populates='leave_balances')
-
-
-    def __repr__(self):
-        return f"<LeaveBalance(id={self.id}, employee_id={self.employee_id})>"
 
 class LeadMessageHistory(db.Model):
     __tablename__ = "messages"
@@ -356,7 +333,7 @@ class SessionState(db.Model):
     
 
 class LeavePolicy(db.Model):
-    _tablename_ = 'leave_policies'
+    __tablename__ = 'leave_policies'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
@@ -368,29 +345,33 @@ class LeavePolicy(db.Model):
     documentation_required = db.Column(db.Boolean, default=False)  # Proof required?
     clubbing_rules = db.Column(db.String, nullable=True)  # Allowed to be combined?
 
-    def _repr_(self):
+    def __repr__(self):
         return f"<LeavePolicy {self.request_type}>"
 
 class LeaveBalance(db.Model):
-    _tablename_ = 'leave_balances'
+    __tablename__ = 'leave_balances'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employeenew.id'), nullable=False)
-    request_type = db.Column(db.String, db.ForeignKey('leave_policies.request_type'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    request_type = db.Column(db.String, nullable=False)
     balance = db.Column(db.Float, nullable=False)  # Remaining leave balance (supports half-day: 0.5)
+    
+    # Track creation and updates
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    # ✅ Correct relationship referenceF
+    # ✅ Correct relationship reference
     employee = db.relationship("Employee", back_populates="leave_balances")
-    policy = db.relationship("LeavePolicy", backref="leave_balances")
+    # policy = db.relationship("LeavePolicy", backref="leave_balances")
 
-    def _repr_(self):
+    def __repr__(self):
         return f"<LeaveBalance {self.request_type} - {self.balance} days>"
 
 class LeaveRequest(db.Model):
-    _tablename_ = 'leave_requests'
+    __tablename__ = 'leave_requests'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employeenew.id'))
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'))
     request_type = db.Column(db.String, db.ForeignKey('leave_policies.request_type'))
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
@@ -409,5 +390,16 @@ class LeaveRequest(db.Model):
     )
     policy = db.relationship("LeavePolicy", backref="leave_requests")
 
-    def _repr_(self):
+    def __repr__(self):
         return f"<LeaveRequest {self.request_type} ({self.status})>"
+    
+class HuseApp(db.Model):
+    __tablename__ = "huse_app"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    huse_app_id = db.Column(db.Integer, nullable=False)
+    app_username = db.Column(db.String(255), nullable=False)
+    app_password = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return f"<HuseApp(id={self.id}, huse_app_id={self.huse_app_id}, app_username='{self.app_username}')>"

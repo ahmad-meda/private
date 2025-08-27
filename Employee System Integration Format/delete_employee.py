@@ -29,12 +29,8 @@ def soft_delete_employee(contact_number, user_message:str):
     session_messages = EmployeeSessionProxy.get_messages(contact_number)
     print(f"Message History: {session_messages}")
 
-    # Filter out assistant messages to prevent hallucination - only use user messages for extraction
-    user_messages = [msg for msg in session_messages if msg.get("role") == "user"]
-    
     # Here we extract the data required to locate the employee in the database.
-    # Only use user messages to prevent the AI from being influenced by assistant responses
-    extracted_data = soft_delete_employee_extraction(messages=user_messages[-2:])
+    extracted_data = soft_delete_employee_extraction(messages=session_messages[-2:])
     print(f"Extracted Data: {extracted_data}")            
     
     # We try to identify the employee based on name or contact number.
@@ -97,4 +93,4 @@ def soft_delete_employee(contact_number, user_message:str):
 
 while True:
     user_input = input("User: ")
-    soft_delete_employee(contact_number="+971501234567", user_message=user_input)
+    soft_delete_employee(contact_number="+971509784398", user_message=user_input)

@@ -46,10 +46,10 @@ class EmployeeProxy:
             return EmployeeService._add_created_by_to_employee_record(employee_record_id, hr_id, db.session)
     
     @staticmethod
-    def get_all_employee_names():
+    def get_all_employee_names(hr_company_id: int = None, hr_group_id: int = None):
         from app import app, db
         with app.app_context():
-            return EmployeeService.get_all_employee_names(db.session)
+            return EmployeeService.get_all_employee_names(db.session, hr_company_id, hr_group_id)
     
     @staticmethod
     def get_role_choices():
@@ -408,4 +408,28 @@ class EmployeeProxy:
         from app import app, db
         with app.app_context():
             return EmployeeService.save_employee_office_locations(employee_id, office_location_names, db.session)
+        
+    @staticmethod
+    def create_leave_balances_for_employee(employee_id: int):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.create_leave_balances_for_employee(employee_id, db.session)
+        
+    @staticmethod
+    def check_username_exists(username: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.check_username_exists(db.session, username)
+        
+    @staticmethod
+    def check_password_exists(password: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.check_password_exists(db.session, password)
+        
+    @staticmethod
+    def add_employee_to_huse(huse_app_id: int, app_username: str, app_password: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.add_employee_to_huse(huse_app_id, app_username, app_password, db.session)
         

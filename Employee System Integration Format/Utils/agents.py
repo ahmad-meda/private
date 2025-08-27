@@ -372,9 +372,8 @@ def update_employee_end_response(messages: list):
             "role": "system",
             "content": (
                 f"""
-                After updating any information another both will ask if the user wants to update anything else. Capture the users intent and return True if he want to end.
-                if he wants to end, return True and a message to the user a goodbye  message saying thanks for updating.
-                You are supposed to end after the user update something and whats to leave, only then you need to end, and only generate a message when the boolean is true.
+                The user is process of updating an employee information, if the user wants to leave the update employee, change the Boolean to True.
+                If the boolean is True, generate a message to the user on farewell. You are only allowed to make the boolean true only if the user says he wants to exit the update employee.
                 """
             )
         }

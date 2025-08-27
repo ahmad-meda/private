@@ -27,8 +27,8 @@ class EmployeeChoices:
         return EmployeeProxy.get_work_policy_choices()
     
     @staticmethod
-    def get_all_employee_names():
-        return EmployeeProxy.get_all_employee_names()
+    def get_all_employee_names(hr_company_id: int = None, hr_group_id: int = None):
+        return EmployeeProxy.get_all_employee_names(hr_company_id, hr_group_id)
     
     @staticmethod
     def get_gender_choices():
