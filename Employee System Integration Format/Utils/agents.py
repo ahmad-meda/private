@@ -1,4 +1,4 @@
-from Utils.formats import EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields       
+from Utils.formats import AskUserForConfirmationToUpdateEmployee, EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields, AskUserForConfirmation, AskUserForConfirmationToAddEmployee       
 from Utils.ai_client import client
 from Files.SQLAlchemyModels import Employee
 
@@ -372,7 +372,7 @@ def update_employee_end_response(messages: list):
             "role": "system",
             "content": (
                 f"""
-                The user is process of updating an employee information, if the user wants to leave the update employee, change the Boolean to True.
+                The user is process of updating an employee information, if the user explicitly says he wants to leave the update employee, change the Boolean to True.
                 If the boolean is True, generate a message to the user on farewell. You are only allowed to make the boolean true only if the user says he wants to exit the update employee.
                 """
             )
@@ -448,6 +448,66 @@ def update_employee_fields_only(messages: list):
         model=model,
         messages=system_message,
         response_format=EmployeeUpdateFields
+    )
+
+    return completion.choices[0].message.parsed
+
+def ask_user_for_confirmation(messages: list):
+    
+    system_message = [
+        {
+            "role": "system",
+            "content": (
+                f""" The user has been asked for confirmation to delete an employee, if the user wants to delete the employee, change the Boolean to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
+                """
+            )
+        }
+    ] + messages
+
+    completion = client.beta.chat.completions.parse(
+        model=model,
+        messages=system_message,
+        response_format=AskUserForConfirmation
+    )
+
+    return completion.choices[0].message.parsed
+
+def ask_user_for_confirmation_to_add_employee(messages: list):
+    
+    system_message = [
+        {
+            "role": "system",
+            "content": (
+                f""" The user has been asked for confirmation to add an employee, if the user wants to add the employee, change the Boolean to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
+                """
+            )
+        }
+    ] + messages
+
+    completion = client.beta.chat.completions.parse(
+        model=model,
+        messages=system_message,
+        response_format=AskUserForConfirmationToAddEmployee
+    )
+
+    return completion.choices[0].message.parsed
+
+def ask_user_for_confirmation_to_update_employee(messages: list):
+    
+    system_message = [
+        {
+            "role": "system",
+            "content": (
+                f""" The user has been asked for confirmation to update an employee, if the user wants to update the employee with the asked changes, then change the Boolean to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
+                """
+            )
+        }
+    ] + messages
+
+    completion = client.beta.chat.completions.parse(
+        model=model,
+        messages=system_message,
+        response_format=AskUserForConfirmationToUpdateEmployee
     )
 
     return completion.choices[0].message.parsed

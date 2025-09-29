@@ -1,6 +1,10 @@
 import requests
 from typing import Dict, Any, Optional
 from huse.credentials import generate_security_answer
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
 def prepare_huse_data(employee_data: Dict[str, Any], security_question: str, username: str, plain_password: str) -> Dict[str, Any]:

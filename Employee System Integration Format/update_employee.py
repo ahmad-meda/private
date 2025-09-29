@@ -1,10 +1,10 @@
 from proxies.proxy import EmployeeProxy
-from Utils.agents import update_employee_response, update_employee_extraction, extract_data, locate_update_employee, update_employee_end_response, ask_user_what_else_to_update, update_employee_fields_only
+from Utils.agents import ask_user_for_confirmation_to_update_employee, update_employee_response, update_employee_extraction, extract_data, locate_update_employee, update_employee_end_response, ask_user_what_else_to_update, update_employee_fields_only
 from Utils.fields_to_delete import agent_states
 from Utils.choices import EmployeeChoices
 from Utils.fuzzy_logic import find_best_match
 from proxies.proxy import EmployeeProxy
-from proxies.employee_message_proxy import LeadMessageHistoryProxy
+from proxies.employee_message_proxy import EmployeeMessageHistoryProxy
 from Utils.sanitization import sanitize_messages
 from proxies.employee_session_proxy import EmployeeSessionProxy
 from Utils.name_separation import separate_name
@@ -15,7 +15,7 @@ from Utils.dummy_functions import send_whatsapp_message, clear_session
 def update_employee_fields(contact_number:str, user_message:str):
 
     # Save the user message in Postgres db and Redis session
-    LeadMessageHistoryProxy.save_message(contact_number, "user", user_message)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "user", user_message)
     EmployeeSessionProxy.add_message(contact_number, {"role": "user", "content": user_message})
 
     # Get the previous messages of the conversation from redis session
@@ -49,8 +49,8 @@ def update_employee_fields(contact_number:str, user_message:str):
     # We use this boolean to check if the session is closing.
     closing_session = False
     
-    LeadMessageHistoryProxy.save_message(contact_number, "user", user_message)
-    messages = LeadMessageHistoryProxy.get_message_history(contact_number)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "user", user_message)
+    messages = EmployeeMessageHistoryProxy.get_message_history(contact_number)
     extraction_messages = sanitize_messages(messages)
 
     # Always extract current data for employee identification
@@ -59,7 +59,7 @@ def update_employee_fields(contact_number:str, user_message:str):
     does_user_want_to_exit = update_employee_end_response(messages=session_messages)
     if does_user_want_to_exit.does_user_want_end_interaction is True:
         print(f"User wants to exit: {does_user_want_to_exit.farwell_message_to_user}")
-        LeadMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.farwell_message_to_user)
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.farwell_message_to_user)
         send_whatsapp_message(contact_number, does_user_want_to_exit.farwell_message_to_user)
         EmployeeSessionProxy.clear_employee_session(contact_number)
         EmployeeSessionProxy.clear_messages(contact_number)
@@ -68,10 +68,104 @@ def update_employee_fields(contact_number:str, user_message:str):
 
     if employee_identified is False:
         extracted_current_data = locate_update_employee(messages=session_messages)
-    
-    # Extracted data after the employee has been identified.
+
+     # Extracted data after the employee has been identified.
     extracted_data = update_employee_extraction(messages=session_messages[-2:])
 
+    #-----Confirmation loop-----
+    asked_confirmation_to_update = EmployeeSessionProxy.get_update_agent_confirmation(contact_number=contact_number)
+    print(f"Asked Confirmation to Update: {asked_confirmation_to_update}")
+    if asked_confirmation_to_update == True:
+        llm_response = ask_user_for_confirmation_to_update_employee(messages=session_messages[-2:])
+        print(f"LLM Response: {llm_response}")
+        if llm_response.does_user_want_to_update_the_employee == True:
+            print("Updating in main database")
+            if_fields_present = extracted_data.model_dump(exclude_none=True)
+            print(f"If Fields Present: {if_fields_present}")
+            update_result = EmployeeProxy._update_employee_by_id(employee_db_id=employee_id,
+                                                    full_name=extracted_data.full_name, 
+                                                    contact_number=extracted_data.contact_number,
+                                                    company_name=extracted_data.company_name, 
+                                                    role=extracted_data.role, 
+                                                    work_policy_name=extracted_data.work_policy_name, 
+                                                    office_location_name=extracted_data.office_location_name, 
+                                                    department_name=extracted_data.department_name, 
+                                                    reporting_manager_name=extracted_data.reporting_manager_name, 
+                                                    first_name=extracted_data.first_name, 
+                                                    middle_name=extracted_data.middle_name, 
+                                                    last_name=extracted_data.last_name, 
+                                                    emailId=extracted_data.emailId, 
+                                                    designation=extracted_data.designation, 
+                                                    dateOfJoining=extracted_data.dateOfJoining, 
+                                                    dateOfBirth=extracted_data.dateOfBirth, 
+                                                    gender=extracted_data.gender, 
+                                                    home_latitude=extracted_data.home_latitude, 
+                                                    home_longitude=extracted_data.home_longitude,
+                                                    allow_site_checkin=extracted_data.allow_site_checkin,
+                                                    restrict_to_allowed_locations=extracted_data.restrict_to_allowed_locations,
+                                                    reminders=extracted_data.reminders,
+                                                    is_hr=extracted_data.is_hr,
+                                                    hr_scope=extracted_data.hr_scope,
+                                                    hr_company_id=employee_record.company_id,
+                                                    hr_group_id=employee_record.group_id)
+            print(f"Update Result: {update_result}")
+            error_dict = update_result.get("errors", {}) if isinstance(update_result, dict) else {}
+            if error_dict == {}:
+                closing_session = True
+                # Clear the confirmation status after successful update
+                EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+            extracted_fields_and_values = []
+            for field, value in if_fields_present.items():
+                extracted_fields_and_values.append(f"{field}: {value}")
+
+            fields_mentioned = update_employee_fields_only(messages=session_messages[-2:])
+            chosen_fields = [field for field in fields_mentioned.model_dump(exclude_none=True) if fields_mentioned.model_dump(exclude_none=True)[field]]
+            print("fields with names:",chosen_fields)
+
+            list_of_fields_with_no_value = [field for field in chosen_fields if field not in extracted_data.model_dump(exclude_none=True)]
+            print(f"list_of_fields_to_update: {list_of_fields_with_no_value}")
+
+            # We print the extracted fields and values, result, fields chosen by user, fields with value and error dict.
+            print("--------------------------------")
+            print(f"Extracted Fields and Values: {extracted_fields_and_values}")
+            print(f"Update Result: {update_result}")
+            print(f"Fields chosen by user: {chosen_fields}")
+            print(f"Fields with value: {list_of_fields_with_no_value}")
+            print("--------------------------------")
+
+            print(f"Error Dict: {error_dict}")
+            
+            # Use the agent to generate appropriate response after update
+            response = ask_user_what_else_to_update(extracted_fields_and_values, update_result, list_of_fields_with_no_value)
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+            EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
+            send_whatsapp_message(contact_number, response.message_to_user)
+            print(f"chat_assistant: {response.message_to_user}")
+            
+        if llm_response.did_user_mention_editing_employee_details:
+            EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+            print("User mentioned editing employee details")
+            pass
+        elif llm_response.does_user_want_to_update_the_employee != True:
+            # User said no, always send farewell message
+            if error_dict == {}:
+                send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+                EmployeeSessionProxy.clear_messages(contact_number)
+                EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+                EmployeeSessionProxy.clear_employee_session(contact_number)
+                clear_session(contact_number)
+                return
+        else:
+            send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+            EmployeeSessionProxy.clear_messages(contact_number)
+            EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+            EmployeeSessionProxy.clear_employee_session(contact_number)
+            clear_session(contact_number)
+            return
+            
+    
     # Fuzzy logic to find the best match for the extracted data.
     if employee_identified == True:
         if extracted_data.work_policy_name or extracted_data.office_location_name or extracted_data.department_name or extracted_data.reporting_manager_name or extracted_data.role or extracted_data.company_name or extracted_data.full_name or extracted_data.gender:
@@ -131,52 +225,6 @@ def update_employee_fields(contact_number:str, user_message:str):
     # Only attempt update if employee is identified and employee_id is valid
     if employee_identified and employee_id is not None:
 
-        # Checks if the user has mentioned any new information to update.
-        if_fields_present = extracted_data.model_dump(exclude_none=True)
-        print(f"If Fields Present: {if_fields_present}")
-
-        # We run the service function only when the user has given any new information to update.
-        if if_fields_present:
-            result = EmployeeProxy._update_employee_by_id(employee_db_id=employee_id,
-                                                    full_name=extracted_data.full_name, 
-                                                    contact_number=extracted_data.contact_number,
-                                                    company_name=extracted_data.company_name, 
-                                                    role=extracted_data.role, 
-                                                    work_policy_name=extracted_data.work_policy_name, 
-                                                    office_location_name=extracted_data.office_location_name, 
-                                                    department_name=extracted_data.department_name, 
-                                                    reporting_manager_name=extracted_data.reporting_manager_name, 
-                                                    first_name=extracted_data.first_name, 
-                                                    middle_name=extracted_data.middle_name, 
-                                                    last_name=extracted_data.last_name, 
-                                                    emailId=extracted_data.emailId, 
-                                                    designation=extracted_data.designation, 
-                                                    dateOfJoining=extracted_data.dateOfJoining, 
-                                                    dateOfBirth=extracted_data.dateOfBirth, 
-                                                    gender=extracted_data.gender, 
-                                                    home_latitude=extracted_data.home_latitude, 
-                                                    home_longitude=extracted_data.home_longitude,
-                                                    allow_site_checkin=extracted_data.allow_site_checkin,
-                                                    restrict_to_allowed_locations=extracted_data.restrict_to_allowed_locations,
-                                                    reminders=extracted_data.reminders,
-                                                    is_hr=extracted_data.is_hr,
-                                                    hr_scope=extracted_data.hr_scope,
-                                                    hr_company_id=employee_record.company_id,
-                                                    hr_group_id=employee_record.group_id)
-            print(f"Result: {result}")
-            error_dict = result["errors"]
-            if error_dict == {}:
-                closing_session = True
-            extracted_fields_and_values = []
-            for field, value in if_fields_present.items():
-                extracted_fields_and_values.append(f"{field}: {value}")
-
-    # If the employee is identified, we ask the user to choose the fields they want to update.
-    if employee_identified == True:
-
-        print("--------------------------------IN EMPLOYEE IDENTIFIED LOOP--------------------------------")
-
-        # we get the field the user wanted to update here, we filter out the fileds that user mentioned but didn't give a value.
         fields_mentioned = update_employee_fields_only(messages=session_messages[-2:])
         chosen_fields = [field for field in fields_mentioned.model_dump(exclude_none=True) if fields_mentioned.model_dump(exclude_none=True)[field]]
         print("fields with names:",chosen_fields)
@@ -187,25 +235,71 @@ def update_employee_fields(contact_number:str, user_message:str):
         # We print the extracted fields and values, result, fields chosen by user, fields with value and error dict.
         print("--------------------------------")
         print(f"Extracted Fields and Values: {extracted_fields_and_values}")
-        print(f"Result: {result}")
+        print(f"Update Result: {result}")
         print(f"Fields chosen by user: {chosen_fields}")
         print(f"Fields with value: {list_of_fields_with_no_value}")
         print("--------------------------------")
 
-        print(f"Error Dict: {error_dict}")
-        response = ask_user_what_else_to_update(extracted_fields_and_values, result, list_of_fields_with_no_value)
-        LeadMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
-        send_whatsapp_message(contact_number, response.message_to_user)
-        print(f"chat_assistant: {response}")
-        if closing_session == True:
-            LeadMessageHistoryProxy.clear_message_history(contact_number)
-            EmployeeSessionProxy.clear_employee_session(contact_number)
-            EmployeeSessionProxy.clear_messages(contact_number)
-            clear_session(contact_number)
-            return response.message_to_user
+
+        # Checks if the user has mentioned any new information to update.
+        if_fields_present = extracted_data.model_dump(exclude_none=True)
+        print(f"If Fields Present: {if_fields_present}")
+
+        # Get employee details for messages
+        employee_details = EmployeeProxy.get_employee_record_by_id(employee_id)
+        employee_name = employee_details.name if employee_details else "the employee"
+
+        # Handle different scenarios based on what the user provided
+        if if_fields_present and list_of_fields_with_no_value:
+            # Scenario 1: User provided some fields with values AND some fields without values
+            # Show confirmation for fields with values, ask for missing values
+            
+            # Format the fields with values for confirmation
+            fields_display = []
+            for field, value in if_fields_present.items():
+                fields_display.append(f"• *{field}*: {value}")
+            
+            # Format the fields without values
+            missing_fields = ", ".join(list_of_fields_with_no_value)
+            
+            confirmation_message = f"I can see you want to update *{employee_name}* with:\n\n" + "\n".join(fields_display)
+            confirmation_message += f"\n\nPlease provide the updated values for these fields: {missing_fields}"
+            
+            # Don't set confirmation status yet - wait for missing values
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", confirmation_message)
+            send_whatsapp_message(contact_number, confirmation_message)
+            return
+            
+        elif if_fields_present and not list_of_fields_with_no_value:
+            # Scenario 2: User provided fields with values, no missing values
+            # Show confirmation message
+            
+            fields_display = []
+            for field, value in if_fields_present.items():
+                fields_display.append(f"• *{field}*: {value}")
+            
+            confirmation_message = f"Are you sure you want to make the following changes to *{employee_name}*?\n\n" + "\n".join(fields_display)
+            
+            # Set the update agent confirmation status to True
+            EmployeeSessionProxy.set_update_agent_confirmation(contact_number, True)
+            
+            # Send the confirmation message
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", confirmation_message)
+            send_whatsapp_message(contact_number, confirmation_message)
+            return
+            
+        else:
+            # Scenario 3 & 4: No fields with values provided OR no fields mentioned at all
+            # Use the agent for these cases
+            response = ask_user_what_else_to_update(extracted_fields_and_values, result, list_of_fields_with_no_value)
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+            EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
+            send_whatsapp_message(contact_number, response.message_to_user)
+            return
+
     else:
         response = update_employee_response(messages=session_messages[-4:], employee_identified=employee_identified, error_dict=error_dict, fields=agent_states.mandatory_fields)
-        LeadMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
         EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
         send_whatsapp_message(contact_number, response.message_to_user)
         print(f"chat_assistant: {response}")
@@ -213,4 +307,4 @@ def update_employee_fields(contact_number:str, user_message:str):
 
 while True:
     user_input = input("User: ")
-    update_employee(contact_number="+971509784398", user_message=user_input)
+    update_employee_fields(contact_number="+971509784398", user_message=user_input)

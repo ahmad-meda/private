@@ -7,6 +7,7 @@ from typing import Tuple
 from sqlalchemy.orm import Session
 from proxies.proxy import EmployeeProxy
 from Utils.password_helpers import generate_username, generate_password, hash_password, split_name, check_username_exists
+from helpers.username_validation import get_all_usernames_from_api
 
 
 def generate_credentials(employee_name: str, db_session: Session = None) -> Tuple[str, str, str]:
@@ -29,12 +30,12 @@ def generate_credentials(employee_name: str, db_session: Session = None) -> Tupl
     username = generate_username(first_name, last_name)
     attempts = 0
     
-    # This is to ensure username uniqueness by checking database and regenerating if needed
+    # This is to ensure username uniqueness by checking database and Huse API and regenerating if needed
     # This prevents conflicts when multiple employees have similar names
     # Example: "John Doe" -> "jdoe", if exists -> "john.doe", if exists -> "jdoe123"
-    while check_username_exists(username) and attempts < 10:
+    while (check_username_exists(username) or username in get_all_usernames_from_api()) and attempts < 10:
         username = generate_username(first_name, last_name)  # Generate alternative username
-        attempts += 1  # Thhis to prevent infinite loops by limiting attempts
+        attempts += 1  # This to prevent infinite loops by limiting attempts
     
     # This is to generate a secure password (bcrypt handles uniqueness automatically)
     plain_password = generate_password()
@@ -78,16 +79,16 @@ def generate_security_answer(employee_name: str, employee_id: str = None) -> str
         first_name = name_parts[0].lower()
         last_name = name_parts[-1].lower()
         
-        # Generate the security answer
-        security_answer = f"{first_name}{last_name}{unique_id}"
+        # Generate the security answer and truncate to 25 characters max
+        security_answer = f"{first_name}{last_name}{unique_id}"[:25]
         
     elif len(name_parts) == 1:
         # Single name - use it with the unique identifier
         name = name_parts[0].lower()
-        security_answer = f"{name}{unique_id}"
+        security_answer = f"{name}{unique_id}"[:25]
         
     else:
         # Fallback for empty names
-        security_answer = f"user{unique_id}"
+        security_answer = f"user{unique_id}"[:25]
     
     return security_answer

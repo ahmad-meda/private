@@ -30,11 +30,11 @@ class EmployeeData(BaseModel):
     reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out.")
     is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
     hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'.")
-    multiple_office_locations_to_check_in: Optional[List[str]] = Field(description="This is a list of office locations to check-in from. The user will give names of the office locations to check-in from.")
+    multiple_office_locations_to_check_in: Optional[List[str]] = Field(description="This is a list of office locations to check-in from. The bot will ask the user the multiple office locations for the employee to checkin from. The user will give names of the office locations to check-in from.")
 
 class SoftDeleteExtraction(BaseModel):
-    employee_name: Optional[str] = None
-    contact_number: Optional[str] = None
+    employee_name: Optional[str] = Field(description="The name of the single employee to be deleted.")
+    contact_number: Optional[str] = Field(description="The contact number of the employee to be deleted.")
     email: Optional[str] = None
 
 class SoftDeleteEmployeeResponse(BaseModel):
@@ -46,9 +46,9 @@ class UpdateEmployeeResponse(BaseModel):
 class UpdateEmployeeExtraction(BaseModel):
     full_name: Optional[str] = None
     contact_number: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    middle_name: Optional[str] = None
+    first_name: Optional[str] = Field(description="only extract this if the  user only mentions the first name of the employee to update.")
+    last_name: Optional[str] = Field(description="only extract this if the  user only mentions the last name of the employee to update.")
+    middle_name: Optional[str] = Field(description="only extract this if the  user only mentions the middle name of the employee to update.")
     emailId: Optional[str] = None
     designation: Optional[str] = None
     dateOfJoining: Optional[str] = None
@@ -125,9 +125,9 @@ class EmployeeSelectionExtraction(BaseModel):
 class EmployeeUpdateFields(BaseModel):
     full_name: Optional[bool] = False
     contact_number: Optional[bool] = False
-    first_name: Optional[bool] = False
-    last_name: Optional[bool] = False
-    middle_name: Optional[bool] = False
+    first_name: Optional[bool] = Field(description="This is True if the user wants to update the first name of the employee. do not extract this if the user mentions the full name of the employee to update.")
+    last_name: Optional[bool] = Field(description="This is True if the user wants to update the last name of the employee. do not extract this if the user mentions the full name of the employee to update.")
+    middle_name: Optional[bool] = Field(description="This is True if the user wants to update the middle name of the employee. do not extract this if the user mentions the full name of the employee to update.")
     emailId: Optional[bool] = False
     designation: Optional[bool] = False
     dateOfJoining: Optional[bool] = False
@@ -147,3 +147,19 @@ class EmployeeUpdateFields(BaseModel):
     is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
     hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'.")
     
+
+class AskUserForConfirmation(BaseModel):
+    does_user_want_to_delete: bool
+    farewell_message_to_user: Optional[str] = Field(description="This is the message to the user if say anything other than yes to the confirmation.")
+    did_user_mention_another_employee: Optional[bool] = Field(description="This is True if the user mentions another employee to delete after saying no to the confirmation.")
+
+
+class AskUserForConfirmationToAddEmployee(BaseModel):
+    does_user_want_to_add_the_employee: bool
+    farewell_message_to_user: Optional[str] = Field(description="This is the message to the user if say anything other than yes to the confirmation.")
+    did_user_mention_editing_employee_details: Optional[bool] = Field(description="This is True if the user mentions another employee to add after saying no to the confirmation.")
+
+class AskUserForConfirmationToUpdateEmployee(BaseModel):
+    does_user_want_to_update_the_employee: bool = Field(description="This is True if the user wants to update the employee with the asked changes.")
+    farewell_message_to_user: Optional[str] = Field(description="This is the message to the user if say anything other than yes to the confirmation.")
+    did_user_mention_editing_employee_details: Optional[bool] = Field(description="This is only True if the user mentions that he wants to update any other field after the confirmation")

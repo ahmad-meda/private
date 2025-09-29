@@ -1,6 +1,6 @@
 from Files.SQLAlchemyModels import LeadMessageHistory
 
-class LeadMessageHistoryService:
+class EmployeeMessageHistoryService:
     @staticmethod
     def get_message_history(session, contact_number):
         """

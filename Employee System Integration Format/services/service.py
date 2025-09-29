@@ -1,8 +1,8 @@
 import re
-import bcrypt
+import hashlib
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from Files.SQLAlchemyModels import Attendance, Company, Department, Employee, Draft, Group, OfficeLocation, Role, WorkPolicy, EmployeeDraft, LeaveBalance, HuseApp
+from Files.SQLAlchemyModels import Attendance, Company, Department, Employee, Draft, Group, Lead, OfficeLocation, Role, WorkPolicy, EmployeeDraft, LeaveBalance, LeavePolicy, HuseApp
 from datetime import datetime
 from typing import Tuple, List, Optional, Dict, Any
 from fuzzywuzzy import process
@@ -12,8 +12,53 @@ from Utils.fields_to_get import format_employee_details
 from datetime import date
 from sqlalchemy import func
 from Utils.contact_validation import is_valid_international
+from helpers.email_validation import get_all_emails_from_api
+from helpers.contact_validation import get_all_contacts_from_api
 
 class EmployeeService:
+
+    @staticmethod
+    def get_company_by_id(db: Session, company_id: int) -> Optional[Company]:
+        if company_id is None:
+            return None
+        return db.query(Company).filter(Company.id == company_id).first()
+
+    @staticmethod
+    def get_role_by_id(db: Session, role_id: int) -> Optional[Role]:
+        if role_id is None:
+            return None
+        return db.query(Role).filter(Role.id == role_id).first()
+    
+    @staticmethod
+    def get_work_policy_by_id(db: Session, work_policy_id: int) -> Optional[WorkPolicy]:
+        if work_policy_id is None:
+            return None
+        return db.query(WorkPolicy).filter(WorkPolicy.id == work_policy_id).first()
+    
+    @staticmethod
+    def get_office_location_by_id(db: Session, office_location_id: int) -> Optional[OfficeLocation]:
+        if office_location_id is None:
+            return None
+        return db.query(OfficeLocation).filter(OfficeLocation.id == office_location_id).first()
+    
+    @staticmethod
+    def get_department_by_id(db: Session, department_id: int) -> Optional[Department]:
+        if department_id is None:
+            return None
+        return db.query(Department).filter(Department.id == department_id).first()
+    
+    @staticmethod
+    def get_reporting_manager_by_id(db: Session, reporting_manager_id: int) -> Optional[Employee]:
+        if reporting_manager_id is None:
+            return None
+        return db.query(Employee).filter(Employee.id == reporting_manager_id).first()
+    
+    @staticmethod
+    def get_group_by_id(db: Session, group_id: int) -> Optional[Group]:
+        if group_id is None:
+            return None
+        return db.query(Group).filter(Group.id == group_id).first()
+    
 
     @staticmethod
     def get_employee_draft_record_by_id(employee_id: int, db_session: Session):
@@ -40,6 +85,34 @@ class EmployeeService:
             raise Exception(f"Error retrieving employee by employee id {employee_id}: {str(e)}")
 
     @staticmethod
+    def get_all_usernames(db_session: Session) -> List[str]:
+        """
+        Get all usernames from the employee table.
+        
+        Args:
+            db_session: Database session
+            
+        Returns:
+            List of usernames (excluding None values)
+            
+        Raises:
+            Exception: If there's an error retrieving usernames
+        """
+        try:
+            # Query all usernames that are not None
+            usernames = db_session.query(Employee.username).filter(
+                Employee.username.isnot(None),
+            ).all()
+            
+            # Extract usernames from the query result and filter out None values
+            username_list = [username[0] for username in usernames if username[0] is not None]
+            
+            return username_list
+            
+        except Exception as e:
+            raise Exception(f"Error retrieving all usernames: {str(e)}")
+
+    @staticmethod
     def get_employee_record(contact_number: str, db_session: Session):
         #gets all the record of the employee based on their contact number
         contact_number = None if contact_number is None else re.sub(r'[^\d]', '', str(contact_number))
@@ -53,20 +126,6 @@ class EmployeeService:
         except Exception as e:
             raise Exception(f"Error retrieving employee by contact number {contact_number}: {str(e)}")
         
-    @staticmethod
-    def get_employee_record_by_name(name: str, db_session: Session):
-        #gets all the record of the employee based on their name
-        # Keep the name as text; only trim whitespace. Do not strip non-digits.
-        name = None if name is None else str(name).strip()
-        try:
-            employee = db_session.query(Employee).filter(
-                Employee.name == name
-            ).first()
-            if employee is None:
-                raise ValueError(f"No employee found with name: {name}")
-            return employee
-        except Exception as e:
-                raise Exception(f"Error retrieving employee by name {name}: {str(e)}")
 
 
     @staticmethod
@@ -189,8 +248,8 @@ class EmployeeService:
     
     @staticmethod
     def get_gender_choices(db:Session):
-        #null fields are not included
-        genders = db.query(Employee).filter(Employee.gender.isnot(None)).all()
+        #null fields are not included, get distinct values only
+        genders = db.query(Employee.gender).filter(Employee.gender.isnot(None)).distinct().all()
         return [gender.gender for gender in genders]
     
     @staticmethod
@@ -281,6 +340,15 @@ class EmployeeService:
             return None
         
     @staticmethod
+    def get_group_id_by_name(name: str, db:Session) -> Optional[int]:
+        """Get group ID by name using SQLAlchemy ORM"""
+        try:
+            group = db.query(Group).filter(Group.name == name).first()
+            return group.id if group else None
+        except Exception:
+            return None
+        
+    @staticmethod
     def _adding_new_employee(db_session: Session,
         employee_db_id: int,
         full_name: Optional[str] = None,
@@ -330,6 +398,13 @@ class EmployeeService:
                 if existing_email:
                     emailId = None  
                     error_dict['emailId'] = 'Email already exists for another employee'
+
+                # Check in Huse API
+                if emailId:  # Only check if emailId is not None
+                    huse_emails = get_all_emails_from_api()
+                    if emailId in huse_emails:
+                        emailId = None
+                        error_dict['emailId'] = 'Email already exists in Huse system for another employee'
             
             # Check for duplicate contact number (if contact_number is being updated) and clean it
             if contact_number is not None and contact_number != employee_draft.contact_no:
@@ -347,10 +422,19 @@ class EmployeeService:
                     #fix this
                     contact_number = None  # Set to None to prevent duplicate
                     error_dict['contact_number'] = 'Contact number already exists for another employee'
-                correct_format = is_valid_international(contact_number)
-                if correct_format is False:
-                    contact_number = None
-                    error_dict['contact_number'] = 'Invalid contact number format, the length or the country code is invalid'
+                # Check in Huse API
+                if contact_number:  # Only check if contact_number is not None
+                    huse_contacts = get_all_contacts_from_api()
+                    if "+" + contact_number in huse_contacts:
+                        contact_number = None
+                        error_dict['contact_number'] = 'Contact number already exists in Huse system for another employee'
+                
+                # Only validate format if contact_number is not None
+                if contact_number:
+                    correct_format = is_valid_international(contact_number)
+                    if correct_format is False:
+                        contact_number = None
+                        error_dict['contact_number'] = 'Invalid contact number format, the length or the country code is invalid'
             
             # Look up related entities and validate they exist using existing static methods
             company_id = None
@@ -395,10 +479,15 @@ class EmployeeService:
             
             office_location_id = None
             if office_location_name is not None and office_location_name != 'manager_skip' and office_location_name != 'home_coordinates':
-                office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
-                if office_location_id is None:
-                  
-                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_companies_by_group_and_company(db_session, hr_group_id, hr_company_id))
+                list_of_office_locations = EmployeeService.get_office_locations_by_group_and_company(db_session, hr_group_id, hr_company_id)
+                if office_location_name not in list_of_office_locations:
+                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(list_of_office_locations)
+                    office_location_name = None
+                else:
+                    office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
+                    if office_location_id is None:
+                        error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(list_of_office_locations)
+                        office_location_name = None
             
             department_id = None
             if department_name is not None:
@@ -544,7 +633,9 @@ class EmployeeService:
                 restrict_to_allowed_locations=draft_employee.restrict_to_allowed_locations,
                 reminders=draft_employee.reminders,
                 is_deleted=draft_employee.is_deleted,
-                deleted_at=draft_employee.deleted_at
+                deleted_at=draft_employee.deleted_at,
+                created_by=draft_employee.created_by,
+                
                 # Related entities like leave_requests, attendance, etc. are not copied by default.
             )
 
@@ -618,6 +709,12 @@ class EmployeeService:
                 if existing_email:
                     emailId = None
                     error_dict['emailId'] = 'Email already exists for another employee'
+                else:
+                    # Check if email exists in Huse
+                    huse_emails = get_all_emails_from_api()
+                    if huse_emails and emailId in huse_emails:
+                        emailId = None
+                        error_dict['emailId'] = 'Email already exists in Huse system'
             
             # Validate then check duplicate for contact number (if being updated)
             if contact_number is not None and contact_number != employee.contactNo:
@@ -639,6 +736,13 @@ class EmployeeService:
                         error_dict['contact_number'] = 'Contact number already exists for another employee'
                     else:
                         contact_number = cleaned_contact
+                        # Check if contact number exists in Huse
+                        huse_contacts = get_all_contacts_from_api()
+                        if huse_contacts and cleaned_contact in huse_contacts:
+                            contact_number = None
+                            error_dict['contact_number'] = 'Contact number already exists in Huse system'
+                        else:
+                            contact_number = cleaned_contact
             
             # Look up related entities and validate they exist using existing static methods
             company_id = None
@@ -684,7 +788,7 @@ class EmployeeService:
             if office_location_name is not None:
                 office_location_id = EmployeeService.get_office_location_id_by_name(office_location_name, db_session)
                 if office_location_id is None:
-                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_companies_by_group_and_company(db_session, hr_group_id, hr_company_id))
+                    error_dict['office_location_name'] = 'Office location not found,Please clarify.present choices to user. here are the options: ' + ', '.join(EmployeeService.get_office_locations_by_group_and_company(db_session, hr_group_id, hr_company_id))
             
             department_id = None
             if department_name is not None:
@@ -1595,11 +1699,12 @@ class EmployeeService:
     @staticmethod
     def get_checked_in_employee_ids(db: Session, hr_company_id: int, group_id: int = None):
         """
-        Get IDs of employees who are currently checked in (online) for a specific company
+        Get IDs of employees who are currently checked in (online) for a specific company or group
         
         Args:
             db: Database session
             hr_company_id: Company ID to filter employees
+            group_id: Group ID to filter employees (optional)
         
         Returns:
             list: List of employee IDs who are checked in
@@ -1607,17 +1712,26 @@ class EmployeeService:
         try:
             today = date.today()
             
-            # Query attendance records for employees who are checked in (online)
-            online_attendance_records = db.query(Attendance).join(Employee).filter(
+            # Build the base query
+            query = db.query(Attendance).join(Employee).filter(
                 and_(
                     Attendance.check_in_time.isnot(None),
                     Attendance.check_out_time.is_(None),
                     Attendance.is_active == True,
                     func.date(Attendance.check_in_time) == today,
-                    Employee.company_id == hr_company_id,
                     Employee.is_deleted == False
                 )
-            ).all()
+            )
+            
+            # Apply group or company filtering based on provided parameters
+            if group_id is not None:
+                # If group_id is provided, filter by that group
+                query = query.filter(Employee.group_id == group_id)
+            elif hr_company_id is not None:
+                # If no group_id but company_id is provided, filter by that company
+                query = query.filter(Employee.company_id == hr_company_id)
+            
+            online_attendance_records = query.all()
             
             # Extract employee IDs
             employee_ids = []
@@ -1643,7 +1757,7 @@ class EmployeeService:
             tuple: (result_string, error_dict)
         """
         try:
-            employee_ids = EmployeeService.get_checked_in_employee_ids(db, hr_company_id)
+            employee_ids = EmployeeService.get_checked_in_employee_ids(db, hr_company_id, group_id)
             
             if not employee_ids:
                 return "", {"error": "No employees are currently checked in."}
@@ -1753,7 +1867,7 @@ class EmployeeService:
                         return "", {"error": "Invalid date format. Please use YYYY-MM-DD."}
                     
                 elif field == "office_location_name":
-                    matched_location = find_best_match(value, EmployeeService.get_companies_by_group_and_company(db, group_id, hr_company_id), threshold=85)
+                    matched_location = find_best_match(value, EmployeeService.get_office_locations_by_group_and_company(db, group_id, hr_company_id), threshold=85)
                     location_id = EmployeeService.get_office_location_id_by_name(matched_location, db)
                     if not location_id:
                         return "", {"error": f"Office location '{value}' not found."}
@@ -1809,7 +1923,7 @@ class EmployeeService:
             return "", {"error": str(e)}
         
     @staticmethod
-    def get_companies_by_group_and_company(db: Session, group_id: Optional[int], company_id: int) -> List[str]:
+    def get_office_locations_by_group_and_company(db: Session, group_id: Optional[int], company_id: int) -> List[str]:
         if group_id is not None:
             # Get offices for ALL companies in the group
             offices = db.query(OfficeLocation).join(Company).filter(
@@ -1826,6 +1940,35 @@ class EmployeeService:
         return [o.name for o in offices]
             
     @staticmethod
+    def save_office_locations_to_employee(employee_id: int, office_location_ids: List[int], db: Session) -> Dict[str, Any]:
+        """Save office location associations to the main employee table"""
+        try:
+            from Files.SQLAlchemyModels import allowed_office_locations
+            
+            # Clear existing associations
+            db.execute(
+                allowed_office_locations.delete().where(
+                    allowed_office_locations.c.employee_id == employee_id
+                )
+            )
+            
+            # Add new associations
+            for office_location_id in office_location_ids:
+                db.execute(
+                    allowed_office_locations.insert().values(
+                        employee_id=employee_id,
+                        office_location_id=office_location_id
+                    )
+                )
+            
+            db.commit()
+            return {'success': True}
+            
+        except Exception as e:
+            db.rollback()
+            return {'success': False, 'error': str(e)}
+
+    @staticmethod
     def save_employee_office_locations(employee_id: int, office_location_names: list, db: Session) -> Dict[str, Any]:
     
         error_dict = {}
@@ -1839,7 +1982,7 @@ class EmployeeService:
                 return {'success': False, 'errors': error_dict}
             
             # Get valid office location options for this employee
-            valid_options = EmployeeService.get_companies_by_group_and_company(db, employee.group_id, employee.company_id)
+            valid_options = EmployeeService.get_office_locations_by_group_and_company(db, employee.group_id, employee.company_id)
             total_available_offices = len(valid_options)
             
             # Remove the restriction that prevents setting multiple office locations when only 1 is available
@@ -1884,21 +2027,15 @@ class EmployeeService:
                 error_dict['valid_options'] = valid_options
                 return {'success': False, 'errors': error_dict}
             
-            # Clear old locations and add new ones
-            employee.allowed_office_locations.clear()
-            employee.allowed_office_locations.extend(valid_office_locations)
-            
-            # Turn on the restriction
-            employee.restrict_to_allowed_locations = True
-            
-            # Save to database
-            db.commit()
+            # Just return the office location IDs for you to use later
+            office_location_ids = [loc.id for loc in valid_office_locations]
             
             return {
                 'success': True, 
                 'errors': {},
-                'message': f"Saved {len(valid_office_locations)} out of {total_available_offices} available locations for employee {employee_id}",
-                'allowed_locations': [loc.name for loc in valid_office_locations]
+                'message': f"Validated {len(valid_office_locations)} out of {total_available_offices} available locations",
+                'allowed_locations': [loc.name for loc in valid_office_locations],
+                'office_location_ids': office_location_ids  # Use these IDs however you want
             }
             
         except Exception as e:
@@ -1910,6 +2047,7 @@ class EmployeeService:
     def create_leave_balances_for_employee(employee_id: int, db: Session) -> Dict[str, Any]:
         """
         Create leave balance records for a newly created employee with 0 balance for all leave types.
+        Leave types are dynamically fetched from the LeavePolicy table based on the employee's company ID.
         
         Args:
             employee_id: The ID of the employee to create leave balances for
@@ -1920,25 +2058,32 @@ class EmployeeService:
         """
         error_dict = {}
         
-        # Define the 10 leave types as specified in REQUEST_CATEGORIES
-        leave_types = [
-            "Sick Leave",
-            "Casual Leave", 
-            "Annual / Privileged Leave",
-            "Bereavement Leave",
-            "Paternity Leave",
-            "Maternity Leave",
-            "Comp-Off",
-            "WFH",
-            "REMOTE",
-            "TRAVEL"
-        ]
-        
         try:
             # Check if employee exists
             employee = db.query(Employee).get(employee_id)
             if not employee:
                 error_dict['employee'] = f"Employee {employee_id} not found"
+                return {'success': False, 'errors': error_dict}
+            
+            # Check if employee has a company_id
+            if not employee.company_id:
+                error_dict['company'] = f"Employee {employee_id} does not have a company_id assigned"
+                return {'success': False, 'errors': error_dict}
+            
+            # Fetch leave types from LeavePolicy table based on company_id
+            leave_policies = db.query(LeavePolicy).filter(
+                LeavePolicy.company_id == employee.company_id
+            ).all()
+            
+            if not leave_policies:
+                error_dict['leave_policies'] = f"No leave policies found for company_id {employee.company_id}"
+                return {'success': False, 'errors': error_dict}
+            
+            # Extract unique leave types from the policies
+            leave_types = list(set([policy.request_type for policy in leave_policies]))
+            
+            if not leave_types:
+                error_dict['leave_types'] = f"No leave types found in policies for company_id {employee.company_id}"
                 return {'success': False, 'errors': error_dict}
             
             # Check if leave balances already exist for this employee
@@ -1968,8 +2113,9 @@ class EmployeeService:
             return {
                 'success': True,
                 'errors': {},
-                'message': f"Created {len(leave_types)} leave balance records for employee {employee_id}",
-                'leave_types_created': leave_types
+                'message': f"Created {len(leave_types)} leave balance records for employee {employee_id} based on company {employee.company_id} policies",
+                'leave_types_created': leave_types,
+                'company_id': employee.company_id
             }
             
         except Exception as e:
@@ -1980,7 +2126,7 @@ class EmployeeService:
     @staticmethod
     def check_username_exists(db_session: Session, username: str) -> bool:
         """
-        Check if username already exists in the HuseApp table.
+        Check if username already exists in the Employee table.
         
         Args:
             db_session: SQLAlchemy database session
@@ -1990,10 +2136,10 @@ class EmployeeService:
             True if username exists, False otherwise
         """
         try:
-            existing_user = db_session.query(HuseApp).filter(
-                HuseApp.app_username == username
+            existing_user = db_session.query(Employee).filter(
+                Employee.username == username,
+                Employee.is_deleted == False
             ).first()
-            
             return existing_user is not None
         except Exception as e:
             print(f"Error checking username existence: {e}")
@@ -2002,7 +2148,7 @@ class EmployeeService:
     @staticmethod
     def check_password_exists(db_session: Session, plain_password: str) -> bool:
         """
-        Check if password already exists in the HuseApp table (by comparing hashes).
+        Check if password already exists in the Employee table (by comparing hashes).
         
         Args:
             db_session: SQLAlchemy database session
@@ -2012,82 +2158,235 @@ class EmployeeService:
             True if password exists, False otherwise
         """
         try:
-            
-            # Get all stored passwords and verify against each one
-            stored_passwords = db_session.query(HuseApp.app_password).all()
-            
+            password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+            stored_passwords = db_session.query(Employee.password).filter(Employee.is_deleted == False).all()
             for (stored_hash,) in stored_passwords:
                 try:
-                    if bcrypt.checkpw(plain_password.encode('utf-8'), stored_hash.encode('utf-8')):
+                    if password_hash == stored_hash:
                         return True
-                except:
+                except Exception:
                     continue
-            
             return False
         except Exception as e:
             print(f"Error checking password existence: {e}")
             return False
         
     @staticmethod
-    def add_employee_to_huse(huse_app_id: int, app_username: str, app_password: str, db: Session) -> Dict[str, Any]:
+    def add_employee_to_huse(employee_id: int, huse_app_id: int, app_username: str, app_password: str, db: Session) -> Dict[str, Any]:
         """
-        Add an employee to the HuseApp table.
+        Attach login credentials to an Employee record instead of HuseApp.
         
         Args:
-            huse_app_id: HuseApp ID of that particular Employee.
-            app_username: Username for the Employee to login to HuseApp
-            app_password: Password for the Employee to login to HuseApp
+            employee_id: Employee.id of that particular Employee.
+            huse_app_id: HuseApp.id of that particular HuseApp.
+            app_username: Username for the Employee to login
+            app_password: Password for the Employee to login
             db: Database session
 
         Returns:
             Dict containing success status and any errors
         """
-        
         error_dict = {}
-        
         try:
-            # Check if this huse_app_id already exists for an employee
-            existing_record = db.query(HuseApp).filter(HuseApp.huse_app_id == huse_app_id).first()
-            if existing_record:
-                error_dict['huse_app_id'] = f"HuseApp ID {huse_app_id} already exists in the database"
+            # Validate employee exists
+            employee = db.query(Employee).filter(Employee.id == employee_id, Employee.is_deleted == False).first()
+            if employee is None:
+                error_dict['employee'] = f"Employee {employee_id} not found"
                 return {'success': False, 'errors': error_dict}
-            
-            # Check if username already exists
+
+            # Check if username already exists on another employee
             if EmployeeService.check_username_exists(db, app_username):
-                error_dict['username'] = f"Username '{app_username}' already exists in the database"
-                return {'success': False, 'errors': error_dict}
-            
-            # Check if password already exists
+                # If this employee already has same username, allow; else reject
+                if employee.username != app_username:
+                    error_dict['username'] = f"Username '{app_username}' already exists in the database"
+                    return {'success': False, 'errors': error_dict}
+
+            # Check if password already exists on another employee
             if EmployeeService.check_password_exists(db, app_password):
-                error_dict['password'] = f"Password already exists in the database"
-                return {'success': False, 'errors': error_dict}
-            
-            # Hash the password before storing
-            hashed_password = bcrypt.hashpw(app_password.encode('utf-8'), bcrypt.gensalt())
-            
-            # Create new HuseApp record (id will be auto-incremented)
-            huse_app_record = HuseApp(
-                huse_app_id=huse_app_id,
-                app_username=app_username,
-                app_password=hashed_password.decode('utf-8')
-            )
-            
-            # Add to database
-            db.add(huse_app_record)
+                # If this employee already has same password hash, allow; else reject
+                hashed_password = hashlib.sha256(app_password.encode('utf-8')).hexdigest()
+                if employee.password != hashed_password:
+                    error_dict['password'] = "Password already exists in the database"
+                    return {'success': False, 'errors': error_dict}
+
+            # Hash and save credentials on Employee
+            hashed_password = hashlib.sha256(app_password.encode('utf-8')).hexdigest()
+            employee.username = app_username
+            employee.password = hashed_password
+
+            # Ensure a mapping row exists in HuseApp with this huse_app_id
+            huse_row = db.query(HuseApp).filter(HuseApp.huse_app_id == huse_app_id).first()
+            if huse_row is None:
+                # Create a mapping entry
+                huse_row = HuseApp(
+                    huse_app_id=huse_app_id
+                )
+                db.add(huse_row)
+
             db.commit()
-            
+
             return {
                 'success': True,
                 'errors': {},
-                'message': f"Successfully added employee with HuseApp ID {huse_app_id} to database",
-                'database_id': huse_app_record.id,  # Auto-generated primary key
+                'message': f"Successfully set credentials for Employee ID {employee_id} and ensured HuseApp mapping",
+                'database_id': employee.id,
+                'employee_id': employee.employeeId,
                 'huse_app_id': huse_app_id,
                 'app_username': app_username
             }
-            
         except Exception as e:
             db.rollback()
             error_dict['general'] = f"An unexpected error occurred: {str(e)}"
             return {'success': False, 'errors': error_dict}
         
+    @staticmethod
+    def get_employee_record_by_name(db: Session, name: str, hr_company_id: int = None, group_id: int = None):
+        try:
+            query = db.query(Employee).filter(
+                Employee.name == name,
+                Employee.is_deleted == False
+            )
+            if group_id:
+                query = query.filter(Employee.group_id == group_id)
+            elif hr_company_id:
+                query = query.filter(Employee.company_id == hr_company_id)
+           
+            employee = query.first()
+            if not employee:
+                return None, {"error": f"Employee '{name}' not found."}
+           
+            return employee, {}
+        except Exception as e:
+            return None, {"error": str(e)}
+    
+    @staticmethod
+    def get_company_by_name(db: Session, name: str) -> Optional[int]:
+        """Get company ID by name using SQLAlchemy ORM"""
+        try:
+            company = db.query(Company).filter(Company.name == name).first()
+            return company.id if company else None
+        except Exception:
+            return None
+
+
+    @staticmethod
+    def add_lead(db: Session,
+                 full_legal_name: Optional[str] = None,
+                 preferred_nickname: Optional[str] = None,
+                 date_of_birth: Optional[str] = None,
+                 nationality: Optional[str] = None,
+                 phone_number: Optional[str] = None,
+                 email_address: Optional[str] = None,
+                 suggested_membership_tier: Optional[str] = None,
+                 residential_address: Optional[str] = None,
+                 passport_number: Optional[str] = None,
+                 id_number: Optional[str] = None,
+                 occupation: Optional[str] = None,
+                 job_title: Optional[str] = None, 
+                 linkedin_or_website: Optional[str] = None,
+                 education_background: Optional[str] = None,
+                 notable_affiliations: Optional[str] = None,
+                 lead_comments: Optional[str] = None,
+                 conversion_status: Optional[str] = None,
+                 approval_status: Optional[str] = None,
+                 lead_status: Optional[str] = None,
+                 company: Optional[str] = None,
+                 agent_id: Optional[str] = None,
+                 crm_backend_id: Optional[str] = None,
+                 status : Optional[str] = None
+                 ) -> bool:
+        """
+        Add a new lead to the members table in the database.
             
+        Returns:
+            bool: True if lead was successfully added, False otherwise
+        """
+        # Note: Removed validation to allow NULL values for any field
+        # The database will handle constraints based on the schema
+        
+        try:
+            # Handle date conversion if provided as string
+            date_of_birth_converted = None
+            if date_of_birth:
+                try:
+                    # Try to convert string date to datetime object for validation
+                    datetime.strptime(date_of_birth, '%Y-%m-%d')
+                    date_of_birth_converted = date_of_birth
+                except ValueError as e:
+                    raise ValueError(f"Invalid date format for date_of_birth: {date_of_birth}. Expected format: YYYY-MM-DD") from e
+            
+            # Create new Member instance
+            new_member = Lead(
+                full_legal_name=full_legal_name,
+                preferred_nickname=preferred_nickname,
+                date_of_birth=date_of_birth_converted,
+                nationality=nationality,
+                phone_number=phone_number,
+                email_address=email_address,
+                suggested_membership_tier=suggested_membership_tier,
+                residential_address=residential_address,
+                passport_number=passport_number,
+                id_number=id_number,
+                occupation=occupation,
+                job_title=job_title,
+                linkedin_or_website=linkedin_or_website,
+                education_background=education_background,
+                notable_affiliations=notable_affiliations,
+                lead_comments=lead_comments,
+                conversion_status=conversion_status,
+                approval_status=approval_status,
+                lead_status=lead_status,
+                company=company,
+                agent_id=agent_id,
+                crm_backend_id=crm_backend_id,
+                status=status  
+            )
+            
+            # Add to session and commit
+            db.add(new_member)
+            db.commit()
+            db.refresh(new_member)
+            
+            print(f"Successfully added new lead: {full_legal_name} (ID: {new_member.id})")
+            return True
+            
+        except Exception as e:
+            # Rollback on error
+            db.rollback()
+            print(f"Error adding lead to database: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Full error details: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            raise Exception(f"Error adding lead to database: {str(e)}") from e
+
+    @staticmethod
+    def get_all_active_employees(db_session: Session):
+        """Get all employees that are not deleted"""
+        return db_session.query(Employee).filter(Employee.is_deleted == False).all()
+
+    @staticmethod
+    def update_employee_credentials(db_session: Session, employee_id: int, username: str, password: str):
+        """Update employee's app credentials"""
+        employee = db_session.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            raise ValueError(f"Employee with ID {employee_id} not found")
+        
+        from Utils.password_helpers import hash_password
+        employee.username = username
+        employee.password = hash_password(password)
+        db_session.commit()
+
+    @staticmethod
+    def get_all_employees_by_company(db_session: Session, company_id: int):
+        return db_session.query(Employee).filter(Employee.company_id == company_id, Employee.is_deleted == False).all()
+    
+    @staticmethod
+    def get_all_employees_by_group(db_session: Session, group_id: int):
+        return db_session.query(Employee).filter(Employee.group_id == group_id, Employee.is_deleted == False).all()
+
+    @staticmethod
+    def get_all_employees_by_company_list(db_session: Session, company_list: list[int]):
+        return db_session.query(Employee).filter(Employee.company_id.in_(company_list), Employee.is_deleted == False).all()
+
+    

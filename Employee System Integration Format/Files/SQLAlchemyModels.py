@@ -26,8 +26,8 @@ allowed_office_locations = db.Table(
 
 draft_allowed_office_locations = db.Table(
     'draft_allowed_office_locations',
-    db.Column('draft_employee_id', db.Integer, db.ForeignKey('draft_employee.id'), primary_key=True),
-    db.Column('office_location_id', db.Integer, db.ForeignKey('office_locations.id'), primary_key=True)
+    db.Column('draft_employee_id', db.Integer, primary_key=True),
+    db.Column('office_location_id', db.Integer, primary_key=True)
 )
 
 class Employee(db.Model):
@@ -93,6 +93,8 @@ class Employee(db.Model):
     allow_site_checkin = db.Column(db.Boolean, default=False)
     restrict_to_allowed_locations = db.Column(db.Boolean, default=False, nullable=False)
     created_by = db.Column(db.Integer, nullable=True)
+    username = db.Column(db.String, nullable=True)
+    password = db.Column(db.String, nullable=True)
 
     # 🔗 Leave Requests and Balances
     leave_requests = relationship(
@@ -138,38 +140,26 @@ class EmployeeDraft(db.Model):
     gender = db.Column(db.String, nullable=True)
 
     # 🔗 Office Location (instead of latitude/longitude directly)
-    office_location_id = db.Column(db.Integer, ForeignKey('office_locations.id'), nullable=True)
-    office_location = relationship('OfficeLocation', backref='draft_employee')
+    office_location_id = db.Column(db.Integer, nullable=True)
 
-    allowed_office_locations = relationship(
-        'OfficeLocation',
-        secondary=draft_allowed_office_locations,
-        backref='draft_employees'
-    )
+    # Note: allowed_office_locations relationship removed due to foreign key removal
 
-    work_policy_id = db.Column(db.Integer, ForeignKey('work_policies.id'), nullable=True)
-    work_policy = relationship('WorkPolicy', backref='draft_employee')
+    work_policy_id = db.Column(db.Integer, nullable=True)
 
     # Optional home location if policy requires it
     home_latitude = db.Column(db.Float, nullable=True)
     home_longitude = db.Column(db.Float, nullable=True)
 
     # 🔗 Company and Reporting Hierarchy
-    company_id = db.Column(db.Integer, ForeignKey('companies.id'), nullable=True)
-    company = relationship('Company', backref='draft_employee')
+    company_id = db.Column(db.Integer, nullable=True)
 
-    group_id = db.Column(db.Integer, ForeignKey('groups.id'), nullable=True)
-    group = relationship('Group', backref='draft_employee')
+    group_id = db.Column(db.Integer, nullable=True)
 
-    reporting_manager_id = db.Column(db.Integer, ForeignKey('draft_employee.id'), nullable=True)
-    reporting_manager = relationship("EmployeeDraft", remote_side=[id], backref="subordinates")
+    reporting_manager_id = db.Column(db.Integer, nullable=True)
 
     # 🔗 Roles and Department
-    role_id = db.Column(db.Integer, ForeignKey('role.id'), nullable=True)
-    department_id = db.Column(db.Integer, ForeignKey('department.id'), nullable=True)
-
-    role = relationship('Role', back_populates='draft_employee')
-    department = relationship('Department', back_populates='draft_employee')
+    role_id = db.Column(db.Integer, nullable=True)
+    department_id = db.Column(db.Integer, nullable=True)
 
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
@@ -214,7 +204,6 @@ class Role(db.Model):
     name = db.Column(db.String(255), nullable=False)
     # Add this relationship back to Employee
     employee = relationship('Employee', back_populates='role')
-    draft_employee = relationship('EmployeeDraft', back_populates='role')
     
     def __repr__(self):
         return f"<Role(id={self.id}, name='{self.name}')>"
@@ -227,7 +216,6 @@ class Department(db.Model):
     name = db.Column(db.String(255), nullable=False)
     # Add this relationship back to Employee
     employee = relationship('Employee', back_populates='department')
-    draft_employee = relationship('EmployeeDraft', back_populates='department')
     def __repr__(self):
         return f"<Department(id={self.id}, name='{self.name}')>"
 
@@ -398,8 +386,38 @@ class HuseApp(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     huse_app_id = db.Column(db.Integer, nullable=False)
-    app_username = db.Column(db.String(255), nullable=False)
-    app_password = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
-        return f"<HuseApp(id={self.id}, huse_app_id={self.huse_app_id}, app_username='{self.app_username}')>"
+        return f"<HuseApp(id={self.id}, huse_app_id={self.huse_app_id})>"
+
+
+class Lead(db.Model):
+    __tablename__ = "leads"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    full_legal_name = db.Column(db.String, nullable=True)
+    preferred_nickname = db.Column(db.String, nullable=True)
+    date_of_birth = db.Column(db.String, nullable=True)
+    nationality = db.Column(db.String, nullable=True)
+    phone_number = db.Column(db.String, nullable=True)
+    email_address = db.Column(db.String, nullable=True, unique=True)
+    suggested_membership_tier = db.Column(db.String, nullable=True)
+    residential_address = db.Column(db.String, nullable=True)
+    passport_number = db.Column(db.String, nullable=True)
+    id_number = db.Column(db.String, nullable=True)
+    occupation = db.Column(db.String, nullable=True)
+    job_title = db.Column(db.String, nullable=True)
+    linkedin_or_website = db.Column(db.String, nullable=True)
+    education_background = db.Column(db.String, nullable=True)
+    notable_affiliations = db.Column(db.String, nullable=True)
+    agent_id = db.Column(db.String, nullable=False)
+    lead_status = db.Column(db.String(50), nullable=True)
+    lead_comments = db.Column(db.Text, nullable=True)
+    crm_backend_id = db.Column(db.String, nullable=True)
+    status = db.Column(db.String, nullable=True)
+    conversion_status = db.Column(db.String, nullable=True)
+    approval_status = db.Column(db.String, nullable=True, default="Pending")
+    company = db.Column(db.String, nullable=True)
+
+    def __repr__(self):
+        return f"<Lead(id={self.id}, full_legal_name='{self.full_legal_name}', email_address='{self.email_address}')>"

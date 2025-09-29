@@ -12,3 +12,5 @@ thefuzz
 python-Levenshtein
 bcrypt
 requests
+pandas
+openpyxl

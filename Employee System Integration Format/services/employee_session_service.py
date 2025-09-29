@@ -73,8 +73,75 @@ class EmployeeSessionService:
         messages = self.redis_client.lrange(key, 0, -1)
         return [json.loads(msg) for msg in messages]
     
-    def clear_messages(self, contact_number: str):
-        """Clear all messages for a given contact number"""
-        key = f"contact:{contact_number}:messages"
+    def set_multiple_office_locations(self, contact_number: str, location_names: list):
+        """Set the multiple office locations list for a contact"""
+        key = f"contact:{contact_number}:multiple_office_locations"
+        # Store as JSON string for 24 hours (86400 seconds)
+        self.redis_client.set(key, json.dumps(location_names), ex=86400)
+    
+    def get_multiple_office_locations(self, contact_number: str) -> list:
+        """Get the multiple office locations list for a contact"""
+        key = f"contact:{contact_number}:multiple_office_locations"
+        data = self.redis_client.get(key)
+        if data:
+            return json.loads(data)
+        return []
+    
+    def clear_multiple_office_locations(self, contact_number: str):
+        """Clear the multiple office locations list for a contact"""
+        key = f"contact:{contact_number}:multiple_office_locations"
+        self.redis_client.delete(key)
+    
+    def set_asked_confirmation(self, contact_number: str, asked_confirmation: bool):
+        """Set asked confirmation status for a contact"""
+        key = f"contact:{contact_number}:asked_confirmation"
+        value = "1" if asked_confirmation else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_asked_confirmation(self, contact_number: str) -> bool:
+        """Get asked confirmation status for a contact"""
+        key = f"contact:{contact_number}:asked_confirmation"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_asked_confirmation(self, contact_number: str):
+        """Clear asked confirmation status for a contact"""
+        key = f"contact:{contact_number}:asked_confirmation"
         self.redis_client.delete(key)
 
+    def set_employee_asked_confirmation(self, contact_number: str, asked_confirmation: bool):
+        """Set asked confirmation status for an employee"""
+        key = f"employee:{contact_number}:asked_confirmation"
+        value = "1" if asked_confirmation else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_employee_asked_confirmation(self, contact_number: str) -> bool:
+        """Get asked confirmation status for an employee"""
+        key = f"employee:{contact_number}:asked_confirmation"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_employee_asked_confirmation(self, contact_number: str):
+        """Clear asked confirmation status for an employee"""
+        key = f"employee:{contact_number}:asked_confirmation"
+        self.redis_client.delete(key)
+        
+    def set_update_agent_confirmation(self, contact_number: str, confirmation: bool):
+        """Set update agent confirmation status for a contact"""
+        key = f"contact:{contact_number}:update_agent_confirmation"
+        value = "1" if confirmation else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_update_agent_confirmation(self, contact_number: str) -> bool:
+        """Get update agent confirmation status for a contact"""
+        key = f"contact:{contact_number}:update_agent_confirmation"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_update_agent_confirmation(self, contact_number: str):
+        """Clear update agent confirmation status for a contact"""
+        key = f"contact:{contact_number}:update_agent_confirmation"
+        self.redis_client.delete(key)

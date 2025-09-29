@@ -1,10 +1,10 @@
 from datetime import datetime
-from proxies.employee_message_proxy import LeadMessageHistoryProxy
+from proxies.employee_message_proxy import EmployeeMessageHistoryProxy
 from proxies.proxy import EmployeeProxy
 from proxies.employee_session_proxy import EmployeeSessionProxy
 from Utils.fields_to_add import agent_states
 from Utils.current_field import remove_used_fields_and_return_next, remove_fields_by_name_and_return_next
-from Utils.agents import get_employee_details, extract_data, skipped_employee_details
+from Utils.agents import ask_user_for_confirmation_to_add_employee, get_employee_details, extract_data, skipped_employee_details
 from Utils.fuzzy_logic import find_best_match
 from Utils.choices import EmployeeChoices
 from Utils.enum import DraftType
@@ -13,6 +13,8 @@ from Utils.name_separation import separate_name
 from Utils.explanations import Explanations
 from Utils.null_fields import get_null_fields
 from Utils.dummy_functions import send_whatsapp_message, clear_session
+from huse.backend import huse_update_employee_status, register_employee_in_huse
+from huse.email import send_huse_credentials_email
 
 def create_employee(contact_number:str, user_message:str):
 
@@ -20,7 +22,7 @@ def create_employee(contact_number:str, user_message:str):
 
     # Boolean to regulate optional and mandatory fields.
     skip_optional_logic = False
-    LeadMessageHistoryProxy.save_message(contact_number, "user", user_message)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "user", user_message)
 
      # Get the Sales Agent ID from thedatabase using the contact number
     agent_id, agent_name = EmployeeProxy.get_hr_id_by_contact(contact_number=contact_number)
@@ -32,7 +34,19 @@ def create_employee(contact_number:str, user_message:str):
     # Im storing all the fields that have default values when a record is created over here, if the user answers this fields or skips it, then its added to the redis session list. the fields in this list arent asked again.
     session_fields = EmployeeSessionProxy.get_list(contact_number=contact_number)
     print(f"Session Fields: {session_fields}")
+    
+    # Check if the company is in null fields, if its not then also check if the its session fields, if not then check the office location registered to thst company
+    if "company_name" not in main_fields and "company_name" not in session_fields:
+        #get the company from the db and then if it has any office location
+        draft_record_company = EmployeeProxy.get_employee_draft_record_by_id(employee_id=draft_id)
+        if draft_record_company.company_id is not None:
+            avaliable_office_locations = EmployeeProxy.get_office_locations_by_group_and_company(group_id=draft_record_company.group_id, company_id=draft_record_company.company_id)
+            if avaliable_office_locations is []:
+                EmployeeSessionProxy.add_to_list(contact_number=contact_number, items=["office_location_name"])
+            
+            
 
+    
     # if is_hr_reminders and hr_scope are are not in the session fields then add then in the optional personal fields
     if "is_hr" not in session_fields:
         optional_personal_fields.append("is_hr")
@@ -48,7 +62,7 @@ def create_employee(contact_number:str, user_message:str):
     print(f"Employee Company: {employee_record.company_id}") 
     
 
-    # Auto-assign company when user has no group, after adding the company remive it from the main_fields list, so that it wont be asked.
+    # Auto-assign company when user has no group, after adding the company remove it from the main_fields list, so that it wont be asked.
     if "company_name" in main_fields:
         if employee_record.group_id is None:
             EmployeeProxy.update_employee_company(employee_id=draft_id, company_id=employee_record.company_id)
@@ -70,12 +84,13 @@ def create_employee(contact_number:str, user_message:str):
                                           optional_location_fields=optional_location_fields)
 
     # Error Dictionary and Explanations Dictionary. 
-    # Explanations are passed to the LLM basides the fields so the LLM knows what each field means and so that it can explain to the user. 
+    # Explanations are passed to the LLM besides the fields so the LLM knows what each field means and so that it can explain to the user. 
     error_dict = {}
     explanations = {}  # Clear explanations at the start of each iteration
+    asked_confirmation = EmployeeSessionProxy.get_employee_asked_confirmation(contact_number=contact_number) # Get the asked confirmation status for the employee       
 
-
-
+    multiple_office_locations_result = EmployeeSessionProxy.get_multiple_office_locations(contact_number=contact_number)
+    print(f"Multiple Office Locations Result: {multiple_office_locations_result}")
 
     # ------------------------ Main Logic STARTS Here --------------------------
 
@@ -88,6 +103,140 @@ def create_employee(contact_number:str, user_message:str):
     # Get the previous messages of the conversation from the redis session history. 
     # We are using this because Postgres DB History isn't deleteable and may cause context confusion when a new conversation starts.
     extraction_messages = EmployeeSessionProxy.get_messages(contact_number)
+    print(f"Extraction Messages: {extraction_messages}")
+
+#------------------------------------------------------------------------------------------------------------------------------------   
+    if asked_confirmation == True:
+        llm_response = ask_user_for_confirmation_to_add_employee(messages=extraction_messages[-2:])
+        if llm_response.does_user_want_to_add_the_employee == True:
+            print("Adding in main database")
+            add_result = EmployeeProxy._add_employee_in_main_database(draft_id=draft_id)
+            print(f"adding in main database: ", add_result)
+
+            if "error" in add_result:
+                print(f"ERROR: Failed to add employee to main database: {add_result['error']}")
+                # Send error message to user
+                error_message = f"Sorry, there was an error adding the employee to the database: {add_result['error']}. Please try again or contact support."
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", error_message)
+                send_whatsapp_message(contact_number, error_message)
+                return
+            
+            # Create leave balances for the newly created employee
+            if "new_employee_id" in add_result:
+                
+                print("Clearing messages")
+                EmployeeSessionProxy.clear_messages(contact_number=contact_number) # clear the redis message history after the employee has been successfully added
+                print(f"Messages: {EmployeeSessionProxy.get_messages(contact_number=contact_number)}")
+
+                new_employee_id = add_result["new_employee_id"]
+                print(f"Creating leave balances for employee ID: {new_employee_id}")
+                leave_balance_result = EmployeeProxy.create_leave_balances_for_employee(employee_id=new_employee_id)
+                print(f"Leave balance creation result: {leave_balance_result}")
+
+                office_location_ids = EmployeeSessionProxy.get_multiple_office_locations(contact_number=contact_number)
+                if office_location_ids != []:
+                    EmployeeProxy.save_office_locations_to_employee(employee_id=new_employee_id, office_location_ids=office_location_ids)
+
+                # Create account username and password for the new employee
+                employee_obj = EmployeeProxy.get_employee_record_by_id(new_employee_id)
+                employee_data = {
+                                'id': employee_obj.id,
+                                'name': employee_obj.name,
+                                'emailId': employee_obj.emailId,
+                                'contactNo': "+" + employee_obj.contactNo,
+                                'gender': employee_obj.gender,
+                                'designation': employee_obj.designation,
+                                'dateOfJoining': employee_obj.dateOfJoining,
+                                'dateOfBirth': employee_obj.dateOfBirth,
+                                'first_name': employee_obj.first_name,
+                                'middle_name': employee_obj.middle_name,
+                                'last_name': employee_obj.last_name
+                            }
+                print(f"Employee data: {employee_data}")
+                # Register Employee in HUSE - Create User Account API is being used here.
+                result = register_employee_in_huse(employee_data)
+
+                # After Registering the Employee, send the user his credentials. The HR is also sent the credentials.
+                if result and result.get('success'):
+                    # Extract credentials from the response
+                    credentials = result.get('credentials', {})
+                    huse_data = result.get('data', {})
+                    
+                    # Debug: Print what we're sending to email function
+                    print("Email parameters:")
+                    print(f"employee_email: {employee_data.get('emailId')}")
+                    print(f"username: {credentials.get('username')}")
+                    print(f"password: {credentials.get('password')}")
+                    print(f"security_question: {huse_data.get('securityQuestion')}")
+                    print(f"security_answer: {result.get('security_answer')}")
+                    
+                    # Validate email sending parameters
+                    if not employee_data.get('name') or not employee_data.get('emailId'):
+                        print("Error: Missing employee name or email")
+                        return {"success": False, "message": "Missing employee name or email"}
+                    
+                    if not credentials.get('username') or not credentials.get('password'):
+                        print("Error: Missing credentials")
+                        return {"success": False, "message": "Missing credentials"}
+                    
+                    try:
+                        response = send_huse_credentials_email(
+                            employee=employee_data.get('name'),
+                            employee_emails=[employee_data.get('emailId')],
+                            username=credentials.get('username'),
+                            password=credentials.get('password'),
+                            security_question=huse_data.get('securityQuestion'),
+                            security_answer=result.get('security_answer')  # Use locally generated security answer
+                        )
+                    except Exception as e:
+                        print(f"Error: Failed to send credentials email - {str(e)}")
+                        return {"success": False, "message": f"Failed to send credentials email: {str(e)}"}
+                    
+                    # Change the status of the account created for the employee to active - "3" is the status for active accounts.
+                    huse_user_id = result.get('data', {}).get('id')
+                    if huse_user_id:
+                        try:
+                            status_result = huse_update_employee_status(user_id=huse_user_id, status=3)
+                            print(f"Status update result: {status_result}")
+                        except Exception as e:
+                            print(f"Error: Failed to update employee status - {str(e)}")
+                            return {"success": False, "message": f"Failed to update employee status: {str(e)}"}
+                else:
+                    print(f"Failed to register employee: {result}")
+                                    
+            EmployeeMessageHistoryProxy.clear_message_history(contact_number)
+            EmployeeSessionProxy.clear_list(contact_number=contact_number) # clear the redis message history after the employee has been successfully added
+            EmployeeSessionProxy.clear_messages(contact_number=contact_number) # clear the redis message history after the employee has been successfully added
+            EmployeeSessionProxy.clear_multiple_office_locations(contact_number=contact_number) # clear the multiple office locations after the employee has been successfully added
+            EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number=contact_number)
+            #Get the new employee Record
+            added_employee = EmployeeProxy.get_employee_draft_record_by_id(employee_id=draft_id)
+            end_message = f"Employee {added_employee.name} has been successfully added to the database!"
+            EmployeeProxy._delete_draft(draft_id=draft_table_id)
+            send_whatsapp_message(contact_number, end_message)
+            clear_session(contact_number)
+            print(" --------------------- MESSAGES CLEARED --------------------- ")
+            print(" --------------------- SESSION CLEARED --------------------- ")
+            print(" --------------------- CONFIRMATION VARIABLE CLEARED --------------------- ")
+            print(" --------------------- EMPLOYEE ID CLEARED --------------------- ")
+            return
+            
+        elif llm_response.does_user_want_to_add_the_employee == False:
+            if llm_response.did_user_mention_editing_employee_details:
+                pass
+            else:
+                send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+                EmployeeSessionProxy.clear_messages(contact_number)
+                EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number)
+                EmployeeSessionProxy.clear_employee_session(contact_number)
+                clear_session(contact_number)
+                print(" --------------------- MESSAGES CLEARED --------------------- ")
+                print(" --------------------- SESSION CLEARED --------------------- ")
+                print(" --------------------- CONFIRMATION VARIABLE CLEARED --------------------- ")
+                print(" --------------------- EMPLOYEE ID CLEARED --------------------- ")
+                return
+
 
     # Last 2 messages from session history are passed to the LLM Extraction Agent. 
     # Passing too many previous messages may cause the extraction of a single/multiple field/s to occur in multiple iterations.
@@ -160,9 +309,14 @@ def create_employee(contact_number:str, user_message:str):
             for location_name in extracted_data.multiple_office_locations_to_check_in:
                 location_name = find_best_match(user_input=location_name, choices=EmployeeChoices.get_office_location_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=85)
                 corrected_location_names.append(location_name)
+            
             # Save the office locations to the employee and to add any errors to the error dictionary.  
-            result = EmployeeProxy.save_employee_office_locations(employee_id=draft_id, office_location_names=corrected_location_names)
-            error_dict = result['errors']
+            multiple_office_locations_result = EmployeeProxy.save_employee_office_locations(employee_id=draft_id, office_location_names=corrected_location_names)
+            error_dict = multiple_office_locations_result['errors']
+
+            # Save the office location IDs to Redis session
+            EmployeeSessionProxy.set_multiple_office_locations(contact_number=contact_number, location_names=multiple_office_locations_result["office_location_ids"])
+    
         
         # Validate the updating of the draft - If there is an error in updating a certain field, that field of the extracted data will be set to None
         error_dict = result['errors']
@@ -223,44 +377,46 @@ def create_employee(contact_number:str, user_message:str):
                                                 optional_location_fields=optional_location_fields)
     
     # This was added to handle the case where the user has given a wrong office location name when asked for multiple location check-ins, and the service function has returned an error.
-    if current_field is None and len(remaining_fields) == 0 and error_dict != {}:
+    if current_field is None and error_dict != {}:
         response = get_employee_details(messages=extraction_messages, fields=remaining_fields, error_dict=error_dict, explanations=explanations)
         EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
-        LeadMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
         print(f"Assistant: {response.message_to_user}")
+        send_whatsapp_message(contact_number, response.message_to_user)
         return
         
     # If there are no fields left to add and there are no errors to report then end the add employee agent interaction.
     if current_field is None and len(remaining_fields) == 0 and error_dict == {}:
-        print("Adding in main database")
-        add_result = EmployeeProxy._add_employee_in_main_database(draft_id=draft_id)
-        print(f"adding in main database: ", add_result)
+        draft_employee_id = EmployeeProxy.get_employee_draft_record_by_id(employee_id=draft_id)
+        # Get proper names for ID fields using proxy methods
+        company = EmployeeProxy.get_company_by_id(draft_employee_id.company_id)
+        company_name = company.name if company else "None"
         
-        # Create leave balances for the newly created employee
-        if "new_employee_id" in add_result:
-            new_employee_id = add_result["new_employee_id"]
-            print(f"Creating leave balances for employee ID: {new_employee_id}")
-            leave_balance_result = EmployeeProxy.create_leave_balances_for_employee(employee_id=new_employee_id)
-            print(f"Leave balance creation result: {leave_balance_result}")
+        role = EmployeeProxy.get_role_by_id(draft_employee_id.role_id)
+        role_name = role.name if role else "None"
         
-        LeadMessageHistoryProxy.clear_message_history(contact_number)
-        EmployeeSessionProxy.clear_list(contact_number=contact_number) # clear the redis message history after the employee has been successfully added
-
-        #Get the new employee Record
-        added_employee = EmployeeProxy.get_employee_draft_record_by_id(employee_id=draft_id)
-        end_message = f"Employee {added_employee.name} has been successfully added to the database!"
-        EmployeeProxy._delete_draft(draft_id=draft_table_id)
-        send_whatsapp_message(contact_number, end_message)
-        clear_session(contact_number)
+        office_location = EmployeeProxy.get_office_location_by_id(draft_employee_id.office_location_id)
+        office_location_name = office_location.name if office_location else "None"
+        
+        department = EmployeeProxy.get_department_by_id(draft_employee_id.department_id)
+        department_name = department.name if department else "None"
+        
+        reporting_manager = EmployeeProxy.get_reporting_manager_by_id(draft_employee_id.reporting_manager_id)
+        reporting_manager_name = reporting_manager.name if reporting_manager else "None"
+        
+        message = f"Alright! Before we add the employee, pls confirm if all the details are correct:\n*Full Name*: {draft_employee_id.name or 'None'}\n*Contact Number*: +{draft_employee_id.contact_no or 'None'}\n*Email*: {draft_employee_id.email_id or 'None'}\n*Company*: {company_name}\n*Role*: {role_name}\n*Office Location*: {office_location_name}\n*Department*: {department_name}\n*Reporting Manager*: {reporting_manager_name}\n*Designation*: {draft_employee_id.designation or 'None'}\n*Date Of Joining*: {draft_employee_id.date_of_joining or 'None'}\n*Date Of Birth*: {draft_employee_id.date_of_birth or 'None'}\n*Gender*: {draft_employee_id.gender or 'None'}\n*Reminders*: {draft_employee_id.reminders or 'None'}\n*Is HR*: {draft_employee_id.is_hr or 'None'}\n*HR Scope*: {draft_employee_id.hr_scope or 'None'}\n*Home Latitude*: {draft_employee_id.home_latitude or 'None'}\n*Home Longitude*: {draft_employee_id.home_longitude or 'None'}"
+        send_whatsapp_message(contact_number, message)
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", message)
+        EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": message})
+        EmployeeSessionProxy.set_employee_asked_confirmation(contact_number=contact_number, asked_confirmation=True)
         return
-    
     # When the user first tries to add an employee, after the first message, we display all the fields and what they require to add an employee.
     # All the fields are listed and an example of what the field value should be is also given.
     # Additionally, certain fields explanations are passed as well to make sure the LLM doesn't hallucinate.
     if draft_existed is False:
     
         # place all fields here, this is to show the user what all details are needed to add an employee
-        remaining_fields = ["full_name", "contact_number", "company_name", "role", "work_policy_name", "office_location_name", "department_name", "reporting_manager_name", "emailId", "designation", "dateOfJoining", "dateOfBirth", "gender", "reminders", "is_hr", "hr_scope"]
+        remaining_fields = ["full_name", "contact_number", "company_name", "role", "office_location_name", "department_name", "reporting_manager_name", "emailId", "designation", "dateOfJoining", "dateOfBirth", "gender", "reminders", "is_hr", "hr_scope"]
         if employee_record.group_id is None:
             remaining_fields.remove("hr_scope")
             EmployeeSessionProxy.add_to_list(contact_number=contact_number, items=["hr_scope"])
@@ -278,7 +434,7 @@ def create_employee(contact_number:str, user_message:str):
     # If in the list of fields being passed to the LLM contains office location, then we pass the explanation of office explanation
     # We also pass explanation for multiple office or single office based on the users group and company.
     if "office_location_name" in remaining_fields:
-        office_list = EmployeeProxy.get_companies_by_group_and_company(group_id=employee_record.group_id, company_id=employee_record.company_id)
+        office_list = EmployeeProxy.get_office_locations_by_group_and_company(group_id=employee_record.group_id, company_id=employee_record.company_id)
         explanations["office_location_name"] = Explanations.OFFICE_LOCATION
         if len(office_list) > 1:
             #add the office location names to the explanations
@@ -302,8 +458,9 @@ def create_employee(contact_number:str, user_message:str):
     print(f"Explanations: {explanations}")
     print(f"draft existed? : ",draft_existed)
     response = get_employee_details(messages=extraction_messages, fields=remaining_fields, error_dict=error_dict, explanations=explanations)
+    send_whatsapp_message(contact_number, response.message_to_user)
     EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
-    LeadMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
     print(f"Assistant: {response.message_to_user}")
 
         

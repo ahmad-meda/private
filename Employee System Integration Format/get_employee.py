@@ -1,19 +1,19 @@
 from Utils.agents import get_employee_search_extraction, get_employee_chat
 from Utils.fields_to_get import clean_employee_fields, format_employee_details
 from Utils.sanitization import sanitize_messages
-from proxies.employee_message_proxy import LeadMessageHistoryProxy
+from proxies.employee_message_proxy import EmployeeMessageHistoryProxy
 from proxies.proxy import EmployeeProxy
 from proxies.employee_session_proxy import EmployeeSessionProxy
-from Utils.dummy_functions import send_whatsapp_message, sendLLMResponse, generate_llm_response
+from Utils.dummy_functions import clear_session, send_whatsapp_message, sendLLMResponse, generate_llm_response
 
 def get_employee_records(contact_number: str, user_message: str):
 
     print("Entered Get Employee Records")
 
-    LeadMessageHistoryProxy.save_message(contact_number, "user", user_message)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "user", user_message)
 
     error_dict = {}
-    messages = LeadMessageHistoryProxy.get_message_history(contact_number)
+    messages = EmployeeMessageHistoryProxy.get_message_history(contact_number)
     extraction_messages = sanitize_messages(messages)
 
     # Get the Sales Agent ID from thedatabase using the contact number
@@ -61,7 +61,15 @@ def get_employee_records(contact_number: str, user_message: str):
     
     print(f"TOTAL EMPLOYEES FOUND: {len(all_results)}")
 
-    
+    if len(all_results) == 0:
+        no_employee_message = "I'm sorry, but I couldn't find any employees matching your search criteria. Please try adjusting your search parameters or contact your HR department for assistance."
+        print(f"No employees found. Sending message: {no_employee_message}")
+        EmployeeSessionProxy.clear_messages(contact_number)
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", no_employee_message)
+        send_whatsapp_message(contact_number, no_employee_message)
+        clear_session(contact_number)
+        return
+
     EmployeeSessionProxy.clear_messages(contact_number)
     # EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
     print(f"Employee Record: {employee_info.company_id}")
@@ -69,7 +77,12 @@ def get_employee_records(contact_number: str, user_message: str):
     print(f"User Message: {user_message}")
     print(f"Contact Number: {contact_number}")
     response = sendLLMResponse(employee_info, generate_llm_response(employee_info.company_id, all_results, user_message, contact_number))
-    LeadMessageHistoryProxy.save_message(contact_number, "assistant", response)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response)
+
+
+    clear_session(contact_number)
+    EmployeeSessionProxy.clear_messages(contact_number)
+    EmployeeMessageHistoryProxy.clear_message_history(contact_number)
     return
 
 while True:

@@ -60,6 +60,64 @@ class EmployeeSessionProxy:
         return cls._service.get_messages(contact_number)
     
     @classmethod
-    def clear_messages(cls, contact_number):
-        """Clear all messages for a given contact number"""
-        return cls._service.clear_messages(contact_number)
+    def set_multiple_office_locations(cls, contact_number, location_names):
+        """Set the multiple office locations list for a contact"""
+        return cls._service.set_multiple_office_locations(contact_number, location_names)
+    
+    @classmethod
+    def get_multiple_office_locations(cls, contact_number):
+        """Get the multiple office locations list for a contact"""
+        return cls._service.get_multiple_office_locations(contact_number)
+    
+    @classmethod
+    def clear_multiple_office_locations(cls, contact_number):
+        """Clear the multiple office locations list for a contact"""
+        return cls._service.clear_multiple_office_locations(contact_number)
+    
+    @classmethod
+    def set_asked_confirmation(cls, contact_number, asked_confirmation):
+        """Set asked confirmation status for a contact"""
+        return cls._service.set_asked_confirmation(contact_number, asked_confirmation)
+    
+    @classmethod
+    def get_asked_confirmation(cls, contact_number):
+        """Get asked confirmation status for a contact"""
+        return cls._service.get_asked_confirmation(contact_number)
+    
+    @classmethod
+    def clear_asked_confirmation(cls, contact_number):
+        """Clear asked confirmation status for a contact"""
+        return cls._service.clear_asked_confirmation(contact_number)
+
+
+    @classmethod
+    def set_employee_asked_confirmation(cls, contact_number, asked_confirmation):
+        """Set asked confirmation status for an employee"""
+        return cls._service.set_employee_asked_confirmation(contact_number, asked_confirmation)
+    
+    @classmethod
+    def get_employee_asked_confirmation(cls, contact_number):
+        """Get asked confirmation status for an employee"""
+        return cls._service.get_employee_asked_confirmation(contact_number)
+
+    @classmethod
+    def clear_employee_asked_confirmation(cls, contact_number):
+        """Clear asked confirmation status for an employee"""
+        return cls._service.clear_employee_asked_confirmation(contact_number)
+
+    @classmethod
+    def set_update_agent_confirmation(cls, contact_number, confirmation):
+        """Set update agent confirmation status for a contact"""
+        return cls._service.set_update_agent_confirmation(contact_number, confirmation)
+    
+    @classmethod
+    def get_update_agent_confirmation(cls, contact_number):
+        """Get update agent confirmation status for a contact"""
+        return cls._service.get_update_agent_confirmation(contact_number)
+    
+    @classmethod
+    def clear_update_agent_confirmation(cls, contact_number):
+        """Clear update agent confirmation status for a contact"""
+        return cls._service.clear_update_agent_confirmation(contact_number)
+
+    

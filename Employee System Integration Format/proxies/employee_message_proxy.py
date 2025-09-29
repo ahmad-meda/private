@@ -1,11 +1,11 @@
-from services.employee_message_service import LeadMessageHistoryService
+from services.employee_message_service import EmployeeMessageHistoryService
 
-class LeadMessageHistoryProxy:
+class EmployeeMessageHistoryProxy:
     @staticmethod
     def get_message_history(contact_number):
         from app import app, db
         with app.app_context():
-            return LeadMessageHistoryService.get_message_history(
+            return EmployeeMessageHistoryService.get_message_history(
                 db.session, contact_number
             )
 
@@ -13,7 +13,7 @@ class LeadMessageHistoryProxy:
     def save_message(contact_number, role, content):
         from app import app, db
         with app.app_context():
-            return LeadMessageHistoryService.save_message(
+            return EmployeeMessageHistoryService.save_message(
                 db.session, contact_number, role, content
             )
 
@@ -21,6 +21,6 @@ class LeadMessageHistoryProxy:
     def clear_message_history(contact_number):
         from app import app, db
         with app.app_context():
-            return LeadMessageHistoryService.clear_message_history(
+            return EmployeeMessageHistoryService.clear_message_history(
                 db.session, contact_number
             )

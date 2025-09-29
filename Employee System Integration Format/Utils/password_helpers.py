@@ -1,7 +1,7 @@
 import random
 import string
 import re
-import bcrypt
+import hashlib
 from typing import Tuple
 from proxies.proxy import EmployeeProxy
 
@@ -22,25 +22,24 @@ def split_name(name: str) -> Tuple[str, str]:
         return parts[0], parts[-1]
 
 def generate_username(first_name: str, last_name: str) -> str:
-    """Generate username from name."""
-    first_initial = first_name[0].lower()
-    last_name_lower = last_name.lower()
+    """Generate username from first 4 letters of first name and last 4 letters of last name."""
+    first_name_clean = clean_name(first_name).lower()
+    last_name_clean = clean_name(last_name).lower()
     
-    # Try different username patterns
-    patterns = [
-        f"{first_initial}{last_name_lower}",
-        f"{first_name.lower()}.{last_name_lower}",
-        f"{first_name.lower()}{last_name_lower}",
-        f"{first_initial}{last_name_lower}{random.randint(100, 999)}",
-        f"{first_name.lower()}{random.randint(100, 999)}"
-    ]
+    # Get first 4 letters of first name, or all if less than 4
+    first_4 = first_name_clean[:4] if len(first_name_clean) >= 4 else first_name_clean.ljust(4, 'x')
     
-    for pattern in patterns:
-        if len(pattern) <= 20:  # Max length
-            return pattern
+    # Get first 4 letters of last name, or all if less than 4
+    last_4 = last_name_clean[:4] if len(last_name_clean) >= 4 else last_name_clean.rjust(4, 'x')
     
-    # Fallback
-    return f"{first_initial}{last_name_lower}{random.randint(100, 999)}"
+    # Combine them
+    base_username = f"{first_4}{last_4}"
+    
+    # If username already exists, add random numbers
+    if check_username_exists(base_username):
+        return f"{base_username}{random.randint(1, 99)}"
+    
+    return base_username
 
 def generate_password() -> str:
     """Generate a strong password."""
@@ -69,7 +68,7 @@ def check_username_exists(username: str) -> bool:
 
 def hash_password(password: str) -> str:
     """
-    Hash password using bcrypt.
+    Hash password using SHA-256.
     
     Args:
         password: The plain text password
@@ -77,7 +76,7 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password string
     """
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def check_password(password: str, hashed: str) -> bool:
     """
@@ -90,4 +89,5 @@ def check_password(password: str, hashed: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == hashed
