@@ -584,4 +584,16 @@ class EmployeeProxy:
         from app import app, db
         with app.app_context():
             return EmployeeService.get_all_usernames(db.session)
+        
+    @staticmethod
+    def clear_employee_draft_fields(draft_id: int):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.clear_employee_draft_fields(draft_id, db.session)
+        
+    @staticmethod
+    def get_lead_record(lead_id: int):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_lead_record(db.session, lead_id)
    

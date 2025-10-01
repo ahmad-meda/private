@@ -112,6 +112,8 @@ class Employee(db.Model):
     )
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     attendance = relationship("Attendance", back_populates="employee")
     def __repr__(self):
@@ -170,6 +172,8 @@ class EmployeeDraft(db.Model):
     allow_site_checkin = db.Column(db.Boolean, default=False)
     restrict_to_allowed_locations = db.Column(db.Boolean, default=False, nullable=False)
     created_by = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     def __repr__(self):
         return f"<EmployeeDraft(id={self.id}, name='{self.name}')>"

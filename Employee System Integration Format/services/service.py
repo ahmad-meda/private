@@ -157,6 +157,8 @@ class EmployeeService:
                 return existing_draft.id, existing_draft.draft_id, True
             else:
                 new_employee = EmployeeDraft()
+                new_employee.created_at = datetime.now()
+                new_employee.updated_at = datetime.now()
                 
                 db_session.add(new_employee)
                 db_session.flush() 
@@ -178,6 +180,7 @@ class EmployeeService:
         try:
             draft = db.query(EmployeeDraft).filter(EmployeeDraft.id == employee_record_id).first()
             draft.created_by = hr_id
+            draft.updated_at = datetime.now()
             db.commit()
         except Exception as e:
             raise Exception(f"Error adding created_by to draft for employee {employee_record_id}: {str(e)}")
@@ -259,6 +262,7 @@ class EmployeeService:
             employee.company_id = company_id
             company = db.query(Company).filter(Company.id == company_id).first()
             employee.employee_id = EmployeeService.generate_employee_identifier(db, company)
+            employee.updated_at = datetime.now()
             db.commit()
             return employee.id if employee else None
         except Exception:
@@ -579,6 +583,9 @@ class EmployeeService:
             if date_of_birth is not None:
                 employee_draft.date_of_birth = date_of_birth
 
+            # Update the updated_at timestamp
+            employee_draft.updated_at = datetime.now()
+
             # Commit the changes
             db_session.commit()
 
@@ -635,6 +642,8 @@ class EmployeeService:
                 is_deleted=draft_employee.is_deleted,
                 deleted_at=draft_employee.deleted_at,
                 created_by=draft_employee.created_by,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
                 
                 # Related entities like leave_requests, attendance, etc. are not copied by default.
             )
@@ -830,6 +839,29 @@ class EmployeeService:
             # Update the employee record with provided values
             if full_name is not None:
                 employee.name = full_name
+                
+                # Parse the full name into first, middle, and last names
+                name_parts = full_name.strip().split()
+                if len(name_parts) == 1:
+                    # Only first name provided
+                    first_name = name_parts[0]
+                    middle_name = ""
+                    last_name = ""
+                elif len(name_parts) == 2:
+                    # First and last name provided
+                    first_name = name_parts[0]
+                    middle_name = ""
+                    last_name = name_parts[1]
+                else:
+                    # Three or more parts - first, middle(s), last
+                    first_name = name_parts[0]
+                    last_name = name_parts[-1]
+                    middle_name = " ".join(name_parts[1:-1])
+                
+                # Update the individual name fields
+                employee.first_name = first_name
+                employee.last_name = last_name
+                employee.middle_name = middle_name
             if contact_number is not None:
                 employee.contactNo = contact_number
             if first_name is not None:
@@ -878,6 +910,9 @@ class EmployeeService:
                 employee.dateOfJoining = date_of_joining
             if date_of_birth is not None:
                 employee.dateOfBirth = date_of_birth
+            
+            # Update the updated_at timestamp
+            employee.updated_at = datetime.now()
             
             # Commit the changes
             db_session.commit()
@@ -2389,4 +2424,104 @@ class EmployeeService:
     def get_all_employees_by_company_list(db_session: Session, company_list: list[int]):
         return db_session.query(Employee).filter(Employee.company_id.in_(company_list), Employee.is_deleted == False).all()
 
-    
+    @staticmethod
+    def clear_employee_draft_fields(draft_id: int, db_session: Session) -> Dict[str, Any]:
+        """
+        Reset the EmployeeDraft record to its initial state when first created.
+        Sets fields to their default values or None based on database constraints.
+        
+        Args:
+            draft_id: The ID of the draft record to clear
+            db_session: Database session
+            
+        Returns:
+            Dict containing success status and any errors
+        """
+        try:
+            # Find the draft record
+            draft_record = db_session.query(EmployeeDraft).filter(EmployeeDraft.id == draft_id).first()
+            
+            if not draft_record:
+                return {
+                    "success": False,
+                    "error": f"Draft record with ID {draft_id} not found",
+                    "message": "Draft record not found"
+                }
+            
+            # Reset all fields to their default values or None
+            # Basic employee information
+            draft_record.employee_id = None
+            draft_record.first_name = None
+            draft_record.middle_name = None
+            draft_record.last_name = None
+            draft_record.name = None
+            draft_record.email_id = None
+            draft_record.designation = None
+            draft_record.date_of_joining = None
+            draft_record.date_of_birth = None
+            draft_record.contact_no = None
+            draft_record.gender = None
+            
+            # Location and work policy
+            draft_record.office_location_id = None
+            draft_record.work_policy_id = None
+            draft_record.home_latitude = None
+            draft_record.home_longitude = None
+            
+            # Company and hierarchy
+            draft_record.company_id = None
+            draft_record.group_id = None
+            draft_record.reporting_manager_id = None
+            
+            # Roles and department
+            draft_record.role_id = None
+            draft_record.department_id = None
+            
+            # System fields - reset to defaults
+            draft_record.is_deleted = False
+            draft_record.deleted_at = None
+            draft_record.reminders = True
+            draft_record.allowed_company_ids = None
+            draft_record.is_hr = False
+            draft_record.hr_scope = "company"
+            draft_record.allow_site_checkin = False
+            draft_record.restrict_to_allowed_locations = False
+            draft_record.created_by = None
+            
+            # Update timestamp to reflect the clearing operation
+            draft_record.updated_at = datetime.now()
+            
+            # Commit the changes
+            db_session.commit()
+            
+            return {
+                "success": True,
+                "message": f"Draft record {draft_id} has been cleared successfully",
+                "draft_id": draft_id
+            }
+            
+        except SQLAlchemyError as e:
+            db_session.rollback()
+            return {
+                "success": False,
+                "error": f"Database error: {str(e)}",
+                "message": "Failed to clear draft record due to database error"
+            }
+        except Exception as e:
+            db_session.rollback()
+            return {
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
+                "message": "Failed to clear draft record due to unexpected error"
+            }
+
+    @staticmethod
+    def get_lead_record(db_session: Session, lead_id: int):
+        try:
+            result = db_session.query(Lead).filter(Lead.id == lead_id).first()
+            if result:
+                return result
+            return None
+        except Exception as e:
+            print(f"Error retrieving lead record: {str(e)}")
+            return None

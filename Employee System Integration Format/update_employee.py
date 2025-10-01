@@ -63,6 +63,7 @@ def update_employee_fields(contact_number:str, user_message:str):
         send_whatsapp_message(contact_number, does_user_want_to_exit.farwell_message_to_user)
         EmployeeSessionProxy.clear_employee_session(contact_number)
         EmployeeSessionProxy.clear_messages(contact_number)
+        EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
         clear_session(contact_number)
         return
 
@@ -139,31 +140,38 @@ def update_employee_fields(contact_number:str, user_message:str):
             response = ask_user_what_else_to_update(extracted_fields_and_values, update_result, list_of_fields_with_no_value)
             EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
             EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
+            EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
             send_whatsapp_message(contact_number, response.message_to_user)
             print(f"chat_assistant: {response.message_to_user}")
+            if error_dict == {} and list_of_fields_with_no_value == []:
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+                EmployeeSessionProxy.clear_messages(contact_number)
+                EmployeeSessionProxy.clear_employee_session(contact_number)
+                clear_session(contact_number)
+                print(" --------------------- MESSAGES CLEARED --------------------- ")
+                print(" --------------------- SESSION CLEARED --------------------- ")
+                print(" --------------------- CONFIRMATION VARIABLE CLEARED --------------------- ")
+                print(" --------------------- EMPLOYEE ID CLEARED --------------------- ")
+                return
+            return
             
-        if llm_response.did_user_mention_editing_employee_details:
-            EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
-            print("User mentioned editing employee details")
-            pass
-        elif llm_response.does_user_want_to_update_the_employee != True:
-            # User said no, always send farewell message
-            if error_dict == {}:
+        if llm_response.does_user_want_to_update_the_employee != True:
+            if llm_response.did_user_mention_editing_employee_details:
+                EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+                print("User mentioned editing employee details")
+                pass
+            else:
                 send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
                 EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
                 EmployeeSessionProxy.clear_messages(contact_number)
                 EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
                 EmployeeSessionProxy.clear_employee_session(contact_number)
                 clear_session(contact_number)
+                print(" --------------------- MESSAGES CLEARED --------------------- ")
+                print(" --------------------- SESSION CLEARED --------------------- ")
+                print(" --------------------- CONFIRMATION VARIABLE CLEARED --------------------- ")
+                print(" --------------------- EMPLOYEE ID CLEARED --------------------- ")
                 return
-        else:
-            send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
-            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
-            EmployeeSessionProxy.clear_messages(contact_number)
-            EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
-            EmployeeSessionProxy.clear_employee_session(contact_number)
-            clear_session(contact_number)
-            return
             
     
     # Fuzzy logic to find the best match for the extracted data.

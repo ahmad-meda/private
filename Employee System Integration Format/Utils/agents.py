@@ -1,4 +1,4 @@
-from Utils.formats import AskUserForConfirmationToUpdateEmployee, EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields, AskUserForConfirmation, AskUserForConfirmationToAddEmployee       
+from Utils.formats import AskUserForConfirmationToUpdateEmployee, EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields, AskUserForConfirmation, AskUserForConfirmationToAddEmployee, AskUserForConfirmationToClearEmployeeDraft       
 from Utils.ai_client import client
 from Files.SQLAlchemyModels import Employee
 
@@ -24,7 +24,7 @@ def get_employee_details(messages:list, fields:list, error_dict:dict, explanatio
                     some fields require explanantion: {explanations}.
                     
                     - Always refer to the employee in third person, even if the HR agent uses first-person language.
-                    Keep it short, friendly, and conversational.
+                    Keep it short and friendly.
                     ask all the fields in one go"""
             )
         }
@@ -38,19 +38,22 @@ def get_employee_details(messages:list, fields:list, error_dict:dict, explanatio
 
     return completion.choices[0].message.parsed
 
-def extract_data(messages):
+def extract_data(messages, list_of_fields: dict):
         extraction_messages = [
             {
                 "role": "system",
                 "content": (
 
-                    """You are a data extraction assistant being used to extract data given by the user about an employee. 
+                    f"""You are a data extraction assistant.
                     
-                    Only extract data that was explicitly provided by the user in the conversation. DO NOT invent, assume, or hallucinate any data that was not mentioned by the user. If a field was not provided by the user, leave it as null/None.
+                    CURRENT DRAFT RECORD Collected Data 
+                    {list_of_fields}
+
+                    From this conversation, extract the fields that are empty and the fields that are provided by the user.
                     
-                    From this conversation, extract ONLY the employee info that was actually given by the user as structured data.
-                    date as postgres format (YYYY-MM-DD)
-                    name saved in professional format(upper and lower case)
+                    IMPORTANT: Only extract NEW information that the user is providing in their current message.
+                    Date format: YYYY-MM-DD
+                    Name format: Professional case (First Last)
                     """
                 )
             }
@@ -140,7 +143,7 @@ def update_employee_extraction(messages:list):
             "role": "system",
             "content": (
                     """You are a data extraction assistant being used to update an employee in the db. 
-                    You are supposed to extract only the new data the user wants to update.Do not extract the data the user has provided to identify the employee.
+                    You are supposed to extract only the NEW data the user wants to update.Do not extract the data the user has provided to identify the employee.
                     From this conversation, extract the confirmed employee new details as structured data.
                     date as postgres format (YYYY-MM-DD)
                     name saved in professional format(upper and lower case)
@@ -372,7 +375,7 @@ def update_employee_end_response(messages: list):
             "role": "system",
             "content": (
                 f"""
-                The user is process of updating an employee information, if the user explicitly says he wants to leave the update employee, change the Boolean to True.
+                The user is process of updating an employee information, if the user explicitly says he wants to leave the update employee only then change the Boolean to True.
                 If the boolean is True, generate a message to the user on farewell. You are only allowed to make the boolean true only if the user says he wants to exit the update employee.
                 """
             )
@@ -438,7 +441,7 @@ def update_employee_fields_only(messages: list):
             "role": "system",
             "content": (
                 f"""
-                You are a data extraction assistant used to identify which fields the user wants to update.Do not capture the fields that the user has provided to identify the employee. Change the fields that the user want to update to true.
+                You are a data extraction assistant used to identify which fields the user explicitly said he wants to update.Do not capture the fields that the user has provided to identify the employee. Change the fields that the user want to update to true.
                 """
             )
         }
@@ -498,7 +501,7 @@ def ask_user_for_confirmation_to_update_employee(messages: list):
         {
             "role": "system",
             "content": (
-                f""" The user has been asked for confirmation to update an employee, if the user wants to update the employee with the asked changes, then change the Boolean to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
+                f""" The user has been asked for confirmation to update an employee, if the user wants to update the employee with the asked changes, then change the Boolean to True. If the user wants to edit the displayed details then dont change the boolean does_user_want_to_add_the_employee to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
                 """
             )
         }
@@ -508,6 +511,26 @@ def ask_user_for_confirmation_to_update_employee(messages: list):
         model=model,
         messages=system_message,
         response_format=AskUserForConfirmationToUpdateEmployee
+    )
+
+    return completion.choices[0].message.parsed
+
+def ask_user_for_confirmation_to_clear_employee_draft(messages: list):
+    
+    system_message = [
+        {
+            "role": "system",
+            "content": (
+                f""" The user has been asked that a draft is already present and  if he wants to continue filling that draft or wants to add a new employee by clearing the previous draft. if the user says yes, please change the boolean to true.
+                """
+            )
+        }
+    ] + messages
+
+    completion = client.beta.chat.completions.parse(
+        model=model,
+        messages=system_message,
+        response_format=AskUserForConfirmationToClearEmployeeDraft
     )
 
     return completion.choices[0].message.parsed

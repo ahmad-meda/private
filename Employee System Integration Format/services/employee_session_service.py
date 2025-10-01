@@ -145,3 +145,57 @@ class EmployeeSessionService:
         """Clear update agent confirmation status for a contact"""
         key = f"contact:{contact_number}:update_agent_confirmation"
         self.redis_client.delete(key)
+    
+    def set_user_trying_to_add_new_employee(self, contact_number: str, trying_to_add: bool):
+        """Set user trying to add new employee status for a contact"""
+        key = f"contact:{contact_number}:user_trying_to_add_new_employee"
+        value = "1" if trying_to_add else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_user_trying_to_add_new_employee(self, contact_number: str) -> bool:
+        """Get user trying to add new employee status for a contact"""
+        key = f"contact:{contact_number}:user_trying_to_add_new_employee"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_user_trying_to_add_new_employee(self, contact_number: str):
+        """Clear user trying to add new employee status for a contact"""
+        key = f"contact:{contact_number}:user_trying_to_add_new_employee"
+        self.redis_client.delete(key)
+    
+    def set_asked_user_draft_continuation(self, contact_number: str, asked_continuation: bool):
+        """Set asked user draft continuation status for a contact"""
+        key = f"contact:{contact_number}:asked_user_draft_continuation"
+        value = "1" if asked_continuation else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_asked_user_draft_continuation(self, contact_number: str) -> bool:
+        """Get asked user draft continuation status for a contact"""
+        key = f"contact:{contact_number}:asked_user_draft_continuation"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_asked_user_draft_continuation(self, contact_number: str):
+        """Clear asked user draft continuation status for a contact"""
+        key = f"contact:{contact_number}:asked_user_draft_continuation"
+        self.redis_client.delete(key)
+    
+    def set_correcting_final_confirmation_changes(self, contact_number: str, correcting_changes: bool):
+        """Set correcting final confirmation changes status for a contact"""
+        key = f"contact:{contact_number}:correcting_final_confirmation_changes"
+        value = "1" if correcting_changes else "0"
+        # Store for 24 hours (86400 seconds)
+        self.redis_client.set(key, value, ex=86400)
+    
+    def get_correcting_final_confirmation_changes(self, contact_number: str) -> bool:
+        """Get correcting final confirmation changes status for a contact"""
+        key = f"contact:{contact_number}:correcting_final_confirmation_changes"
+        value = self.redis_client.get(key)
+        return value == "1" if value is not None else False
+    
+    def clear_correcting_final_confirmation_changes(self, contact_number: str):
+        """Clear correcting final confirmation changes status for a contact"""
+        key = f"contact:{contact_number}:correcting_final_confirmation_changes"
+        self.redis_client.delete(key)

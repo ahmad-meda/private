@@ -112,14 +112,33 @@ import requests
 # employees = EmployeeProxy.get_all_active_employees()
 # print(employees)
 
+from proxies.employee_session_proxy import EmployeeSessionProxy
+
+EmployeeSessionProxy.clear_asked_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_employee_session(contact_number="+971512345678")
+EmployeeSessionProxy.clear_messages(contact_number="+971512345678")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
+EmployeeSessionProxy.clear_asked_user_draft_continuation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_list(contact_number="+971512345678")
+EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_update_agent_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
+
+
+# from helpers.user_record import update_user_record, get_huse_user_by_username
+# print(get_huse_user_by_username(username="nicokidm"))
+
+# print(update_user_record(username="nicokidm",email="nicoletestingkidman@gmail.com"))
+
+# from proxies.proxy import EmployeeProxy
+# print(EmployeeProxy.clear_employee_draft_fields(draft_id=307))
+
+# from Utils.extraction_fields import get_filled_fields
+# from proxies.proxy import EmployeeProxy
 # from proxies.employee_session_proxy import EmployeeSessionProxy
 
-# EmployeeSessionProxy.clear_asked_confirmation(contact_number="+971509784398")
-# EmployeeSessionProxy.clear_employee_session(contact_number="+971509784398")
-# EmployeeSessionProxy.clear_messages(contact_number="+971509784398")
-# EmployeeSessionProxy.clear_update_agent_confirmation(contact_number="+971509784398")
+# employee_record = EmployeeProxy.get_employee_draft_record_by_id(317)
+# print(get_filled_fields(employee_record))
 
-from helpers.user_record import update_user_record, get_huse_user_by_username
-print(get_huse_user_by_username(username="nicokidm"))
 
-print(update_user_record(username="nicokidm",email="nicoletestingkidman@gmail.com"))
+# print(EmployeeSessionProxy.get_messages(contact_number="+971509784398"))

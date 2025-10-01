@@ -120,4 +120,49 @@ class EmployeeSessionProxy:
         """Clear update agent confirmation status for a contact"""
         return cls._service.clear_update_agent_confirmation(contact_number)
 
+    @classmethod
+    def set_user_trying_to_add_new_employee(cls, contact_number, trying_to_add):
+        """Set user trying to add new employee status for a contact"""
+        return cls._service.set_user_trying_to_add_new_employee(contact_number, trying_to_add)
+    
+    @classmethod
+    def get_user_trying_to_add_new_employee(cls, contact_number):
+        """Get user trying to add new employee status for a contact"""
+        return cls._service.get_user_trying_to_add_new_employee(contact_number)
+    
+    @classmethod
+    def clear_user_trying_to_add_new_employee(cls, contact_number):
+        """Clear user trying to add new employee status for a contact"""
+        return cls._service.clear_user_trying_to_add_new_employee(contact_number)
+
+    @classmethod
+    def set_asked_user_draft_continuation(cls, contact_number, asked_continuation):
+        """Set asked user draft continuation status for a contact"""
+        return cls._service.set_asked_user_draft_continuation(contact_number, asked_continuation)
+    
+    @classmethod
+    def get_asked_user_draft_continuation(cls, contact_number):
+        """Get asked user draft continuation status for a contact"""
+        return cls._service.get_asked_user_draft_continuation(contact_number)
+    
+    @classmethod
+    def clear_asked_user_draft_continuation(cls, contact_number):
+        """Clear asked user draft continuation status for a contact"""
+        return cls._service.clear_asked_user_draft_continuation(contact_number)
+
+    @classmethod
+    def set_correcting_final_confirmation_changes(cls, contact_number, correcting_changes):
+        """Set correcting final confirmation changes status for a contact"""
+        return cls._service.set_correcting_final_confirmation_changes(contact_number, correcting_changes)
+    
+    @classmethod
+    def get_correcting_final_confirmation_changes(cls, contact_number):
+        """Get correcting final confirmation changes status for a contact"""
+        return cls._service.get_correcting_final_confirmation_changes(contact_number)
+    
+    @classmethod
+    def clear_correcting_final_confirmation_changes(cls, contact_number):
+        """Clear correcting final confirmation changes status for a contact"""
+        return cls._service.clear_correcting_final_confirmation_changes(contact_number)
+
     
