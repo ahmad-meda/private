@@ -24,7 +24,7 @@ def get_employee_details(messages:list, fields:list, error_dict:dict, explanatio
                     some fields require explanantion: {explanations}.
                     
                     - Always refer to the employee in third person, even if the HR agent uses first-person language.
-                    Keep it short and friendly.
+                    Keep it direct, short and easy to read and friendly.
                     ask all the fields in one go"""
             )
         }
@@ -396,7 +396,7 @@ def ask_user_what_else_to_update(extracted_fields_and_values: list, result: dict
         {
             "role": "system",
             "content": (
-                f""" You are tasked to generate a reply to the user who is trying to update an employee as human like HR Assistant.
+                f""" You are tasked to generate a short easy to read reply to the user who is trying to update an employee as human like HR Assistant.
                 
                 1- fields and field values the user wants to update: {extracted_fields_and_values}
                 2- fields the wants to update but has not provided the value: {list_of_fields_with_no_value}
@@ -501,7 +501,150 @@ def ask_user_for_confirmation_to_update_employee(messages: list):
         {
             "role": "system",
             "content": (
-                f""" The user has been asked for confirmation to update an employee, if the user wants to update the employee with the asked changes, then change the Boolean to True. If the user wants to edit the displayed details then dont change the boolean does_user_want_to_add_the_employee to True. If he doesnt then change the boolean to False and generate a message to the user on farewell.
+                f"""You are analyzing user responses to employee update confirmations. Based on the user's response, determine their intent and set the appropriate boolean flags.
+
+                BOOLEAN LOGIC:
+                1. does_user_want_to_update_the_employee: True if user agrees to proceed with the displayed changes
+                2. did_user_mention_editing_employee_details: True if user wants to modify/edit the displayed details before updating
+                3. is_the_employee_to_update_wrong: True if user says they're trying to update the wrong employee
+
+                EXAMPLES:
+                
+                SCENARIO 1 - User agrees with all changes:
+                Input: "yes, go ahead"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "sure, update it"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "yes please"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "okay"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 2 - User wants to edit/modify details:
+                Input: "wait, change the email to john.doe@company.com"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "actually, make the designation Senior Manager instead"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "no, update the phone number to +971501234567"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "can you change the department to Engineering?"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "I want to update the office location to Dubai"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 3 - User says wrong employee:
+                Input: "that's not the right employee"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": true}}
+                
+                Input: "I meant to update Ahmad, not Ali"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": true}}
+                
+                Input: "wrong person, I want to update Sarah"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": true}}
+                
+                Input: "that's not who I meant"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": true}}
+                
+                SCENARIO 4 - User declines/doesn't want to update:
+                Input: "no, don't update"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "No problem! The employee details remain unchanged. Let me know if you need help with anything else.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "cancel"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "Update cancelled. The employee details remain unchanged. Feel free to reach out if you need any assistance.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "nevermind"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "No worries! The employee details stay as they are. Let me know if you need anything else.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "I changed my mind"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "That's perfectly fine! The employee details remain unchanged. Feel free to contact me if you need any help.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 5 - Vague/Unclear responses:
+                Input: "maybe"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "I understand you're not sure. The employee details will remain unchanged. Please let me know if you'd like to make any updates later.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "I don't know"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "No problem! The employee details will stay as they are. Feel free to reach out when you're ready to make any changes.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "not sure"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "That's okay! The employee details remain unchanged. Let me know if you decide to make any updates later.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "let me think about it"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "Take your time! The employee details will remain as they are. Feel free to contact me when you're ready to make any changes.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 6 - Partial agreement with additional changes:
+                Input: "yes, but also change the department to HR"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "sure, and update the phone number too"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "okay, but make the email john.smith@company.com"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "yes to the name change, but don't change the email"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "update the phone number, but keep the current designation"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 7 - Questions about the update:
+                Input: "what will happen if I update this?"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "The employee's information will be updated in the system with the new details we discussed.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "will this affect other systems?"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "The update will change the employee's information in our HR system. This may affect other integrated systems that use this data. Would you like to proceed with the update?", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 8 - Mixed responses (agree + edit):
+                Input: "yes, but the name should be Ahmad Ali instead"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "sure, go ahead, but change the office to Dubai"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 8B - Partial agreement and disagreement:
+                Input: "yes to the phone number update, but no to the email change"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "update the name, but don't change the department"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "sure about the designation, but keep the current office location"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "yes to contact number, no to email, and also update the role to Manager"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "I agree with the name change, but not the phone number"
+                Output: {{"does_user_want_to_update_the_employee": true, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": true, "is_the_employee_to_update_wrong": false}}
+                
+                SCENARIO 9 - Confusion about the employee:
+                Input: "who is this employee again?"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "This is the employee you selected for updating. Would you like me to show you their current details again, or would you like to proceed with the update?", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "I don't recognize this person"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": true}}
+                
+                SCENARIO 10 - Time-related responses:
+                Input: "later"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "No problem! The employee details will remain unchanged. Feel free to reach out when you're ready to make any updates.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                Input: "tomorrow"
+                Output: {{"does_user_want_to_update_the_employee": false, "farewell_message_to_user": "That's fine! The employee details will stay as they are. Contact me tomorrow when you're ready to make the updates.", "did_user_mention_editing_employee_details": false, "is_the_employee_to_update_wrong": false}}
+                
+                IMPORTANT NOTES:
+                - Set does_user_want_to_update_the_employee to true when user agrees to proceed with ANY of the changes (even if they disagree with some fields)
+                - Set did_user_mention_editing_employee_details to true when user wants to modify any of the displayed details OR when they agree with some fields but disagree with others
+                - Set is_the_employee_to_update_wrong to true when user indicates they're trying to update the wrong person
+                - Provide friendly farewell messages when user declines or is vague
+                - If user agrees with some fields but mentions other fields to add/edit, set BOTH booleans to true
+                - If user agrees with some fields but disagrees with other fields, set BOTH booleans to true (they still want to update the agreed fields)
                 """
             )
         }
@@ -521,7 +664,7 @@ def ask_user_for_confirmation_to_clear_employee_draft(messages: list):
         {
             "role": "system",
             "content": (
-                f""" The user has been asked that a draft is already present and  if he wants to continue filling that draft or wants to add a new employee by clearing the previous draft. if the user says yes, please change the boolean to true.
+                f""" The user has been asked that a draft is already present and if he wants to continue filling that draft or wants to add a new employee by clearing the previous draft. if the user says yes, please change the boolean to true.
                 """
             )
         }

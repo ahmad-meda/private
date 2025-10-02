@@ -163,7 +163,8 @@ class AskUserForConfirmationToUpdateEmployee(BaseModel):
     does_user_want_to_update_the_employee: bool = Field(description="This is True if the user wants to update the employee with the asked changes. This is true if the employee agress to one change when asked for many , if for example, asked for email and contact, but only said yes to contact, so this is boolean will be true.")
     farewell_message_to_user: Optional[str] = Field(description="This is the message to the user if say anything other than yes to the confirmation.")
     did_user_mention_editing_employee_details: Optional[bool] = Field(description="This is only True if the user mentions that he wants to update any other field after the confirmation. This also true if the user wishes to correct the field value asking for confirmation.")
-
+    is_the_employee_to_update_wrong: Optional[bool] = Field(description="This is True if the user mentions that the employee that he is trying to update is wrong.")
+    # This is only for draft continuation
 class AskUserForConfirmationToClearEmployeeDraft(BaseModel):
     does_user_want_to_clear_the_draft: bool = Field(description="This is True if the user wants to clear the draft. if the user wamts to continue with the previous draft then its False")
     is_user_intent_clear: bool = Field(description="If the users reply doesnt convey their intent if they want to clear the draft or not, then this is True")

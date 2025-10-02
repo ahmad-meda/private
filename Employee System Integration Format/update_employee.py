@@ -1,5 +1,5 @@
 from proxies.proxy import EmployeeProxy
-from Utils.agents import ask_user_for_confirmation_to_update_employee, update_employee_response, update_employee_extraction, extract_data, locate_update_employee, update_employee_end_response, ask_user_what_else_to_update, update_employee_fields_only
+from Utils.agents import update_employee_response, update_employee_extraction, extract_data, locate_update_employee, update_employee_end_response, ask_user_what_else_to_update, update_employee_fields_only
 from Utils.fields_to_delete import agent_states
 from Utils.choices import EmployeeChoices
 from Utils.fuzzy_logic import find_best_match
@@ -11,6 +11,7 @@ from Utils.name_separation import separate_name
 from Utils.dummy_functions import send_whatsapp_message
 from proxies.employee_session_proxy import EmployeeSessionProxy
 from Utils.dummy_functions import send_whatsapp_message, clear_session
+from Utils.confirmation_parser import parse_confirmation_response
 
 def update_employee_fields(contact_number:str, user_message:str):
 
@@ -77,9 +78,11 @@ def update_employee_fields(contact_number:str, user_message:str):
     asked_confirmation_to_update = EmployeeSessionProxy.get_update_agent_confirmation(contact_number=contact_number)
     print(f"Asked Confirmation to Update: {asked_confirmation_to_update}")
     if asked_confirmation_to_update == True:
-        llm_response = ask_user_for_confirmation_to_update_employee(messages=session_messages[-2:])
-        print(f"LLM Response: {llm_response}")
-        if llm_response.does_user_want_to_update_the_employee == True:
+        # Use regex-based parser instead of LLM
+        confirmation_intent = parse_confirmation_response(user_message)
+        print(f"Confirmation Intent: {confirmation_intent}")
+        
+        if confirmation_intent.does_user_want_to_update == True:
             print("Updating in main database")
             if_fields_present = extracted_data.model_dump(exclude_none=True)
             print(f"If Fields Present: {if_fields_present}")
@@ -136,6 +139,14 @@ def update_employee_fields(contact_number:str, user_message:str):
 
             print(f"Error Dict: {error_dict}")
             
+            # Handle additional fields if user mentioned them
+            if confirmation_intent.additional_fields:
+                # Merge additional fields with existing extracted data
+                for field, value in confirmation_intent.additional_fields.items():
+                    if hasattr(extracted_data, field):
+                        setattr(extracted_data, field, value)
+                        print(f"Added additional field {field}: {value}")
+            
             # Use the agent to generate appropriate response after update
             response = ask_user_what_else_to_update(extracted_fields_and_values, update_result, list_of_fields_with_no_value)
             EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
@@ -144,7 +155,8 @@ def update_employee_fields(contact_number:str, user_message:str):
             send_whatsapp_message(contact_number, response.message_to_user)
             print(f"chat_assistant: {response.message_to_user}")
             if error_dict == {} and list_of_fields_with_no_value == []:
-                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+                success_message = "Employee details have been updated successfully! Is there anything else you'd like to update?"
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", success_message)
                 EmployeeSessionProxy.clear_messages(contact_number)
                 EmployeeSessionProxy.clear_employee_session(contact_number)
                 clear_session(contact_number)
@@ -155,14 +167,20 @@ def update_employee_fields(contact_number:str, user_message:str):
                 return
             return
             
-        if llm_response.does_user_want_to_update_the_employee != True:
-            if llm_response.did_user_mention_editing_employee_details:
+        if confirmation_intent.does_user_want_to_update != True:
+            if confirmation_intent.did_user_mention_editing:
                 EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
                 print("User mentioned editing employee details")
                 pass
-            else:
-                send_whatsapp_message(contact_number, llm_response.farewell_message_to_user)
-                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", llm_response.farewell_message_to_user)
+            elif confirmation_intent.is_wrong_employee:
+                EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
+                EmployeeSessionProxy.set_employee_identified(contact_number, False)
+                EmployeeSessionProxy.set_employee_id(contact_number, None)
+                print("User indicated wrong employee, resetting employee identification")
+                pass
+            elif confirmation_intent.farewell_message:
+                send_whatsapp_message(contact_number, confirmation_intent.farewell_message)
+                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", confirmation_intent.farewell_message)
                 EmployeeSessionProxy.clear_messages(contact_number)
                 EmployeeSessionProxy.clear_update_agent_confirmation(contact_number)
                 EmployeeSessionProxy.clear_employee_session(contact_number)
