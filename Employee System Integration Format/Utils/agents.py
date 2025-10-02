@@ -1,4 +1,4 @@
-from Utils.formats import AskUserForConfirmationToUpdateEmployee, EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields, AskUserForConfirmation, AskUserForConfirmationToAddEmployee, AskUserForConfirmationToClearEmployeeDraft       
+from Utils.formats import AskUserForConfirmationToUpdateEmployee, EmployeeAgent, EmployeeData, SoftDeleteEmployeeResponse, SoftDeleteExtraction, UpdateEmployeeResponse, UpdateEmployeeExtraction, SkippedDetails, LocateUpdateEmployeeResponse, get_employee_values, get_employee_chat_message, UpdateEmployeeEndResponse, AskUserWhatElseToUpdate, EmployeeUpdateFields, AskUserForConfirmation, AskUserForConfirmationToAddEmployee, AskUserForConfirmationToClearEmployeeDraft, IntentToExitEmployee       
 from Utils.ai_client import client
 from Files.SQLAlchemyModels import Employee
 
@@ -674,6 +674,27 @@ def ask_user_for_confirmation_to_clear_employee_draft(messages: list):
         model=model,
         messages=system_message,
         response_format=AskUserForConfirmationToClearEmployeeDraft
+    )
+
+    return completion.choices[0].message.parsed
+
+def does_user_want_to_exit_add_employee(messages: list):
+    
+    system_message = [
+        {
+            "role": "system",
+            "content": (
+                f"""Change the boolean to true only when the user explicitly says he wants to exit the add employee flow.
+                 Example: "Ill add it later" Boolean will be true.
+                 """
+            )
+        }
+    ] + messages
+
+    completion = client.beta.chat.completions.parse(
+        model=model,
+        messages=system_message,
+        response_format=IntentToExitEmployee
     )
 
     return completion.choices[0].message.parsed

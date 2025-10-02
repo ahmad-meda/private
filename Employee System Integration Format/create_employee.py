@@ -4,7 +4,7 @@ from proxies.proxy import EmployeeProxy
 from proxies.employee_session_proxy import EmployeeSessionProxy
 from Utils.fields_to_add import agent_states
 from Utils.current_field import remove_used_fields_and_return_next, remove_fields_by_name_and_return_next
-from Utils.agents import ask_user_for_confirmation_to_add_employee, get_employee_details, extract_data, skipped_employee_details, ask_user_for_confirmation_to_clear_employee_draft
+from Utils.agents import ask_user_for_confirmation_to_add_employee, get_employee_details, extract_data, skipped_employee_details, ask_user_for_confirmation_to_clear_employee_draft, does_user_want_to_exit_add_employee
 from Utils.fuzzy_logic import find_best_match
 from Utils.choices import EmployeeChoices
 from Utils.enum import DraftType
@@ -42,6 +42,15 @@ def create_employee(contact_number:str, user_message:str):
     # We are using this because Postgres DB History isn't deleteable and may cause context confusion when a new conversation starts.
     extraction_messages = EmployeeSessionProxy.get_messages(contact_number)
     print(f"Extraction Messages: {extraction_messages}")
+
+    does_user_want_to_exit = does_user_want_to_exit_add_employee(messages=extraction_messages)
+    if does_user_want_to_exit.does_user_want_to_exit is True:
+        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.message_to_user_on_exit)
+        send_whatsapp_message(contact_number, does_user_want_to_exit.message_to_user_on_exit)
+        EmployeeSessionProxy.clear_employee_session(contact_number)
+        EmployeeSessionProxy.clear_messages(contact_number)
+        clear_session(contact_number)
+        return
 
 
     is_trying_to_add_new_employee = EmployeeSessionProxy.get_user_trying_to_add_new_employee(contact_number)

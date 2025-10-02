@@ -169,3 +169,7 @@ class AskUserForConfirmationToClearEmployeeDraft(BaseModel):
     does_user_want_to_clear_the_draft: bool = Field(description="This is True if the user wants to clear the draft. if the user wamts to continue with the previous draft then its False")
     is_user_intent_clear: bool = Field(description="If the users reply doesnt convey their intent if they want to clear the draft or not, then this is True")
     message_when_intent_not_clear: Optional[str] = Field(description="This is the message to the user if the boolean is_user_intent_clear is True. Asking them if they want to clear the draft or not.")
+
+class IntentToExitEmployee(BaseModel):
+    does_user_want_to_exit: bool = Field(description="This is ONLY True if the user wants to exit the add employee flow.")
+    message_to_user_on_exit: Optional[str] = Field(description="This is the message to the user if the boolean does_user_want_to_exit is True. Farewell message to user when they want to exit.")
