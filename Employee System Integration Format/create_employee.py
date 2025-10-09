@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from proxies.employee_message_proxy import EmployeeMessageHistoryProxy
 from proxies.proxy import EmployeeProxy
 from proxies.employee_session_proxy import EmployeeSessionProxy
@@ -45,8 +45,12 @@ def create_employee(contact_number:str, user_message:str):
 
     does_user_want_to_exit = does_user_want_to_exit_add_employee(messages=extraction_messages)
     if does_user_want_to_exit.does_user_want_to_exit is True:
-        EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.message_to_user_on_exit)
-        send_whatsapp_message(contact_number, does_user_want_to_exit.message_to_user_on_exit)
+        if does_user_want_to_exit.message_to_user_on_exit is not None:
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", does_user_want_to_exit.message_to_user_on_exit)
+            send_whatsapp_message(contact_number, does_user_want_to_exit.message_to_user_on_exit)
+        else:
+            EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", "Thank you for using our employee system! Have a great day! 👋")
+            send_whatsapp_message(contact_number, "Thank you for using our employee system! Have a great day! 👋")
         EmployeeSessionProxy.clear_employee_session(contact_number)
         EmployeeSessionProxy.clear_messages(contact_number)
         clear_session(contact_number)
@@ -63,8 +67,10 @@ def create_employee(contact_number:str, user_message:str):
     print(f"Correcting final confirmation changes: {in_confirmation_stage}")
 
     record_to_check = EmployeeProxy.get_employee_draft_record_by_id(employee_id=draft_id)
+    print(f"Record to check: {record_to_check.updated_at}")
     #check the time
     current_time = datetime.now()
+    print(f"Current time: {current_time}")
     record_to_check_time = record_to_check.updated_at
     time_difference = current_time - record_to_check_time
     print(f"Time difference: {time_difference}")
@@ -74,6 +80,7 @@ def create_employee(contact_number:str, user_message:str):
     # but only if we haven't just handled the draft confirmation
     if time_difference > timedelta(minutes=30) and not asked_user_draft_continuation:
         EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+        is_trying_to_add_new_employee = EmployeeSessionProxy.get_user_trying_to_add_new_employee(contact_number)
 
     if is_trying_to_add_new_employee:
         # Get proper names for ID fields using proxy methods
@@ -92,7 +99,7 @@ def create_employee(contact_number:str, user_message:str):
         reporting_manager = EmployeeProxy.get_reporting_manager_by_id(record_to_check.reporting_manager_id)
         reporting_manager_name = reporting_manager.name if reporting_manager else "None"
         
-        draft_continuation_message = f"You already have a draft with an employee's details, are you sure you want to continue with the draft or add a new employee?\n Here are the employee details:\n\n*Full Name*: {record_to_check.name}\n*Contact Number*: +{record_to_check.contact_no}\n*Email*: {record_to_check.email_id}\n*Company*: {company_name}\n*Role*: {role_name}\n*Office Location*: {office_location_name}\n*Department*: {department_name}\n*Reporting Manager*: {reporting_manager_name}\n*Designation*: {record_to_check.designation}\n*Date Of Joining*: {record_to_check.date_of_joining}\n*Date Of Birth*: {record_to_check.date_of_birth}\n*Gender*: {record_to_check.gender}\n*Reminders*: {record_to_check.reminders}\n*Is HR*: {record_to_check.is_hr}\n*HR Scope*: {record_to_check.hr_scope}\n*Home Latitude*: {record_to_check.home_latitude}\n*Home Longitude*: {record_to_check.home_longitude}"
+        draft_continuation_message = f"You already have a draft with an employee's details, are you sure you want to continue with the draft or add a new employee?\n Here are the employee details:\n\n*Employee ID*: {record_to_check.employee_id}\n*Full Name*: {record_to_check.name}\n*Contact Number*: +{record_to_check.contact_no}\n*Email*: {record_to_check.email_id}\n*Company*: {company_name}\n*Role*: {role_name}\n*Office Location*: {office_location_name}\n*Department*: {department_name}\n*Reporting Manager*: {reporting_manager_name}\n*Designation*: {record_to_check.designation}\n*Date Of Joining*: {record_to_check.date_of_joining}\n*Date Of Birth*: {record_to_check.date_of_birth}\n*Gender*: {record_to_check.gender}\n*Reminders*: {record_to_check.reminders}\n*Is HR*: {record_to_check.is_hr}\n*HR Scope*: {record_to_check.hr_scope}\n*Home Latitude*: {record_to_check.home_latitude}\n*Home Longitude*: {record_to_check.home_longitude}"
         send_whatsapp_message(contact_number, draft_continuation_message)
         EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", draft_continuation_message)
         EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": draft_continuation_message})
@@ -103,18 +110,15 @@ def create_employee(contact_number:str, user_message:str):
 
     if asked_user_draft_continuation is True:
         draft_continuation_result = ask_user_for_confirmation_to_clear_employee_draft(messages=extraction_messages[-2:])
+        print(f"Draft Continuation Result: {draft_continuation_result}")
         if draft_continuation_result.does_user_want_to_clear_the_draft is True:
             EmployeeProxy.clear_employee_draft_fields(draft_id=draft_id)
             EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, False)
             EmployeeSessionProxy.set_asked_user_draft_continuation(contact_number, False)
         else:
-            if draft_continuation_result.is_user_intent_clear == True:
-                send_whatsapp_message(contact_number, draft_continuation_result.message_when_intent_not_clear)
-                EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", draft_continuation_result.message_when_intent_not_clear)
-                EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": draft_continuation_result.message_when_intent_not_clear})
-                EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, False)
-                EmployeeSessionProxy.set_asked_user_draft_continuation(contact_number, False)
-                return
+            print(f"Draft Continuation Result: {draft_continuation_result}")
+            if draft_continuation_result.is_user_intent_clear == False:
+                pass
             else:
                 EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, False)
                 EmployeeSessionProxy.set_asked_user_draft_continuation(contact_number, False)
@@ -187,7 +191,7 @@ def create_employee(contact_number:str, user_message:str):
     if asked_confirmation == True:
         llm_response = ask_user_for_confirmation_to_add_employee(messages=extraction_messages[-2:])
         print(f"LLM Response: {llm_response}")
-        if llm_response.does_user_want_to_add_the_employee == True:
+        if llm_response.does_user_want_to_add_the_employee == True and llm_response.did_user_mention_editing_employee_details != True:
             print("Adding in main database")
             add_result = EmployeeProxy._add_employee_in_main_database(draft_id=draft_id)
             print(f"adding in main database: ", add_result)
@@ -301,7 +305,7 @@ def create_employee(contact_number:str, user_message:str):
             print(" --------------------- EMPLOYEE ID CLEARED --------------------- ")
             return
             
-        elif llm_response.does_user_want_to_add_the_employee == False:
+        elif llm_response.does_user_want_to_add_the_employee == False or llm_response.did_user_mention_editing_employee_details == True:
             if llm_response.did_user_mention_editing_employee_details:
                 EmployeeSessionProxy.set_employee_asked_confirmation(contact_number, False)
                 EmployeeSessionProxy.set_correcting_final_confirmation_changes(contact_number, True)
@@ -328,7 +332,72 @@ def create_employee(contact_number:str, user_message:str):
     # Get names from IDs when they exist
     filled_fields = get_filled_fields(record_to_check=record_to_check)
     print(f"Filled Fields: {filled_fields}")
-    extracted_data = extract_data(messages=extraction_messages[-2:], list_of_fields=filled_fields)
+    
+    # Get and validate company choices
+    try:
+        company_choices = EmployeeChoices.get_companies_choices(group_id=employee_record.group_id, company_id=employee_record.company_id)
+        if not isinstance(company_choices, list):
+            print(f"Warning: Company choices is not a list, got {type(company_choices)}")
+            company_choices = []
+        elif len(company_choices) == 0:
+            print(f"Warning: Company choices list is empty for group_id={employee_record.group_id}, company_id={employee_record.company_id}")
+        print(f"Company Choices: {company_choices}")
+    except Exception as e:
+        print(f"Error retrieving company choices: {e}")
+        company_choices = []
+    
+    # Get and validate role choices
+    try:
+        role_choices = EmployeeChoices.get_role_choices()
+        if not isinstance(role_choices, list):
+            print(f"Warning: Role choices is not a list, got {type(role_choices)}")
+            role_choices = []
+        elif len(role_choices) == 0:
+            print(f"Warning: Role choices list is empty")
+        print(f"Role Choices: {role_choices}")
+    except Exception as e:
+        print(f"Error retrieving role choices: {e}")
+        role_choices = []
+    
+    # Get and validate department choices
+    try:
+        department_choices = EmployeeChoices.get_departments_choices()
+        if not isinstance(department_choices, list):
+            print(f"Warning: Department choices is not a list, got {type(department_choices)}")
+            department_choices = []
+        elif len(department_choices) == 0:
+            print(f"Warning: Department choices list is empty")
+        print(f"Department Choices: {department_choices}")
+    except Exception as e:
+        print(f"Error retrieving department choices: {e}")
+        department_choices = []
+    
+    # Get and validate gender choices
+    try:
+        gender_choices = EmployeeChoices.get_gender_choices()
+        if not isinstance(gender_choices, list):
+            print(f"Warning: Gender choices is not a list, got {type(gender_choices)}")
+            gender_choices = []
+        elif len(gender_choices) == 0:
+            print(f"Warning: Gender choices list is empty")
+        print(f"Gender Choices: {gender_choices}")
+    except Exception as e:
+        print(f"Error retrieving gender choices: {e}")
+        gender_choices = []
+    
+    # Get and validate office location choices
+    try:
+        office_location_choices = EmployeeChoices.get_office_location_choices(group_id=employee_record.group_id, company_id=employee_record.company_id)
+        if not isinstance(office_location_choices, list):
+            print(f"Warning: Office location choices is not a list, got {type(office_location_choices)}")
+            office_location_choices = []
+        elif len(office_location_choices) == 0:
+            print(f"Warning: Office location choices list is empty for group_id={employee_record.group_id}, company_id={employee_record.company_id}")
+        print(f"Office Location Choices: {office_location_choices}")
+    except Exception as e:
+        print(f"Error retrieving office location choices: {e}")
+        office_location_choices = []
+    extracted_data = extract_data(messages=extraction_messages[-2:], list_of_fields=filled_fields, company_choices=company_choices, role_choices=role_choices, department_choices=department_choices, gender_choices=gender_choices, office_location_choices=office_location_choices)
     print(f"Extracted Data: {extracted_data}")
 
 
@@ -389,10 +458,10 @@ def create_employee(contact_number:str, user_message:str):
         reporting_manager = EmployeeProxy.get_reporting_manager_by_id(record_to_check.reporting_manager_id)
         reporting_manager_name = reporting_manager.name if reporting_manager else "None"
         
-        draft_continuation_message = f"You already have a draft with an employee's details, are you sure you want to continue with the draft or add a new employee?\n Here are the employee details:\n\n*Full Name*: {record_to_check.name}\n*Contact Number*: +{record_to_check.contact_no}\n*Email*: {record_to_check.email_id}\n*Company*: {company_name}\n*Role*: {role_name}\n*Office Location*: {office_location_name}\n*Department*: {department_name}\n*Reporting Manager*: {reporting_manager_name}\n*Designation*: {record_to_check.designation}\n*Date Of Joining*: {record_to_check.date_of_joining}\n*Date Of Birth*: {record_to_check.date_of_birth}\n*Gender*: {record_to_check.gender}\n*Reminders*: {record_to_check.reminders}\n*Is HR*: {record_to_check.is_hr}\n*HR Scope*: {record_to_check.hr_scope}\n*Home Latitude*: {record_to_check.home_latitude}\n*Home Longitude*: {record_to_check.home_longitude}"
+        draft_continuation_message = f"You already have a draft with an employee's details, are you sure you want to continue with the draft or add a new employee?\n Here are the employee details:\n\n*Employee ID*: {record_to_check.employee_id}\n*Full Name*: {record_to_check.name}\n*Contact Number*: {record_to_check.contact_no}\n*Email*: {record_to_check.email_id}\n*Company*: {company_name}\n*Role*: {role_name}\n*Office Location*: {office_location_name}\n*Department*: {department_name}\n*Reporting Manager*: {reporting_manager_name}\n*Designation*: {record_to_check.designation}\n*Date Of Joining*: {record_to_check.date_of_joining}\n*Date Of Birth*: {record_to_check.date_of_birth}\n*Gender*: {record_to_check.gender}\n*Reminders*: {record_to_check.reminders}\n*Is HR*: {record_to_check.is_hr}\n*HR Scope*: {record_to_check.hr_scope}\n*Home Latitude*: {record_to_check.home_latitude}\n*Home Longitude*: {record_to_check.home_longitude}"
         send_whatsapp_message(contact_number, draft_continuation_message)
         EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", draft_continuation_message)
-        EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": draft_continuation_message})
+        EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": draft_continuation_message})  
         EmployeeSessionProxy.set_asked_user_draft_continuation(contact_number, True)
         EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, False)
         return
@@ -403,6 +472,7 @@ def create_employee(contact_number:str, user_message:str):
         print("in if loop after extraction")
         print(extracted_data.model_dump(exclude_none=True))
         result = EmployeeProxy._adding_new_employee(employee_db_id=draft_id, 
+                                                employee_id=extracted_data.employee_id,
                                                 full_name=extracted_data.full_name, 
                                                 contact_number=extracted_data.contact_number,
                                                 company_name=extracted_data.company_name, 
@@ -451,8 +521,9 @@ def create_employee(contact_number:str, user_message:str):
             multiple_office_locations_result = EmployeeProxy.save_employee_office_locations(employee_id=draft_id, office_location_names=corrected_location_names)
             error_dict = multiple_office_locations_result['errors']
 
-            # Save the office location IDs to Redis session
-            EmployeeSessionProxy.set_multiple_office_locations(contact_number=contact_number, location_names=multiple_office_locations_result["office_location_ids"])
+            # Save the office location IDs to Redis session (only if the operation was successful)
+            if multiple_office_locations_result.get('success') and 'office_location_ids' in multiple_office_locations_result:
+                EmployeeSessionProxy.set_multiple_office_locations(contact_number=contact_number, location_names=multiple_office_locations_result["office_location_ids"])
     
         
         # Validate the updating of the draft - If there is an error in updating a certain field, that field of the extracted data will be set to None
@@ -547,6 +618,7 @@ def create_employee(contact_number:str, user_message:str):
         EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": message})
         EmployeeSessionProxy.set_employee_asked_confirmation(contact_number=contact_number, asked_confirmation=True)
         EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, False)
+        EmployeeSessionProxy.set_correcting_final_confirmation_changes(contact_number, True)
         return
     # When the user first tries to add an employee, after the first message, we display all the fields and what they require to add an employee.
     # All the fields are listed and an example of what the field value should be is also given.

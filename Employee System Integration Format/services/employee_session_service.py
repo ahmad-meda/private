@@ -199,3 +199,26 @@ class EmployeeSessionService:
         """Clear correcting final confirmation changes status for a contact"""
         key = f"contact:{contact_number}:correcting_final_confirmation_changes"
         self.redis_client.delete(key)
+    
+    def get_field_confirmation_list(self, contact_number: str) -> dict:
+        """Get all field-value pairs that were asked for confirmation"""
+        key = f"contact:{contact_number}:field_confirmation_list"
+        field_values = self.redis_client.hgetall(key)
+        return field_values
+    
+    def add_field_to_confirmation_list(self, contact_number: str, field_name: str, field_value: str):
+        """Add a field-value pair to the confirmation list"""
+        key = f"contact:{contact_number}:field_confirmation_list"
+        self.redis_client.hset(key, field_name, field_value)
+        # Set expiration for 24 hours (86400 seconds)
+        self.redis_client.expire(key, 86400)
+    
+    def remove_field_from_confirmation_list(self, contact_number: str, field_name: str):
+        """Remove a specific field from the confirmation list"""
+        key = f"contact:{contact_number}:field_confirmation_list"
+        self.redis_client.hdel(key, field_name)
+    
+    def clear_field_confirmation_list(self, contact_number: str):
+        """Clear all field confirmation data for a contact"""
+        key = f"contact:{contact_number}:field_confirmation_list"
+        self.redis_client.delete(key)

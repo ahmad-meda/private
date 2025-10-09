@@ -3,7 +3,7 @@ import hashlib
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from Files.SQLAlchemyModels import Attendance, Company, Department, Employee, Draft, Group, Lead, OfficeLocation, Role, WorkPolicy, EmployeeDraft, LeaveBalance, LeavePolicy, HuseApp
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple, List, Optional, Dict, Any
 from fuzzywuzzy import process
 from sqlalchemy import and_
@@ -353,8 +353,9 @@ class EmployeeService:
             return None
         
     @staticmethod
-    def _adding_new_employee(db_session: Session,
+    def _adding_new_employee(db_session: Session,                                 
         employee_db_id: int,
+        employee_id: Optional[str] = None,
         full_name: Optional[str] = None,
         contact_number: Optional[str] = None,
         company_name: Optional[str] = None,
@@ -458,15 +459,26 @@ class EmployeeService:
                         if group_id is not None:
                             employee_draft.group_id = group_id
                         
-                        # Only generate employee_id if we have a valid company
-                        generated_id = EmployeeService.generate_employee_identifier(db_session, company)
-                        if generated_id is not None:
-                            employee_draft.employee_id = generated_id
-                        else:
-                            error_dict['company_name'] = 'Failed to generate employee identifier'
+                         
                     else:
                         error_dict['company_name'] = 'Company not found, please clarify. present choices to user. here are the options: ' + ', '.join(EmployeeService.get_company_choices(db_session, hr_group_id, hr_company_id))
-            
+
+            if employee_id is not None:
+                # Convert employee_id to uppercase
+                employee_id = employee_id.upper()
+                
+                # Check for duplicate employee_id in the database
+                existing_employee = db_session.query(Employee).filter(
+                    Employee.employeeId == employee_id,
+                    Employee.is_deleted == False
+                ).first()
+                
+                if existing_employee:
+                    error_dict['employee_id'] = 'Employee ID already exists for another employee'
+                else:
+                    employee_draft.employee_id = employee_id
+
+
             role_id = None
             if role is not None:
                 role_id = EmployeeService.get_role_id_by_name(role, db_session)
@@ -573,6 +585,8 @@ class EmployeeService:
                 employee_draft.department_id = department_id
             if reporting_manager_id is not None:
                 employee_draft.reporting_manager_id = reporting_manager_id
+            if employee_id is not None:
+                employee_draft.employee_id = employee_id
             # Note: Office location restrictions are handled after draft is published to main employee table
             # if multiple_office_locations_to_check_in is not None:
             #     EmployeeService.save_employee_office_locations(employee_db_id, multiple_office_locations_to_check_in, db_session)
@@ -661,6 +675,7 @@ class EmployeeService:
     @staticmethod
     def _update_employee_by_id(db_session: Session,
         employee_db_id: int,
+        employee_id: Optional[str] = None,
         full_name: Optional[str] = None,
         contact_number: Optional[str] = None,
         company_name: Optional[str] = None,
@@ -771,14 +786,24 @@ class EmployeeService:
                         if group_id is not None:
                             employee.group_id = group_id
                         
-                        # Only generate employee_id if we have a valid company
-                        generated_id = EmployeeService.generate_employee_identifier(db_session, company)
-                        if generated_id is not None:
-                            employee.employeeId = generated_id
-                        else:
-                            error_dict['company_name'] = 'Failed to generate employee identifier'
                     else:
                         error_dict['company_name'] = 'Company not found'
+
+            if employee_id is not None:
+
+                employee_id = employee_id.upper()
+                
+                # Check for duplicate employee_id in the database
+                existing_employee = db_session.query(Employee).filter(
+                    Employee.employeeId == employee_id,
+                    Employee.id != employee_db_id,
+                    Employee.is_deleted == False
+                ).first()
+                
+                if existing_employee:
+                    error_dict['employee_id'] = 'Employee ID already exists for another employee'
+                else:
+                    employee.employeeId = employee_id
                     
             
             role_id = None
@@ -890,6 +915,8 @@ class EmployeeService:
                 employee.is_hr = is_hr
             if hr_scope is not None:
                 employee.hr_scope = hr_scope
+            if employee_id is not None:
+                employee.employeeId = employee_id
             
             # Update foreign key references
             if company_id is not None:
@@ -1931,6 +1958,19 @@ class EmployeeService:
                         # No checked-in employees, return empty result
                         return "", {"error": "No employees are currently checked in."}
                     
+                elif field == "employee_id":
+                    # Filter by group first, if group is null then by company
+                    if group_id is not None:
+                        query = query.filter(
+                            Employee.employeeId == value,
+                            Employee.group_id == group_id
+                        )
+                    else:
+                        query = query.filter(
+                            Employee.employeeId == value,
+                            Employee.company_id == hr_company_id
+                        )
+                    
                     
                 else:
                     return "", {"error": f"Unsupported criteria field: '{field}'"}
@@ -2525,3 +2565,149 @@ class EmployeeService:
         except Exception as e:
             print(f"Error retrieving lead record: {str(e)}")
             return None
+        
+
+    @staticmethod
+    def add_employee_directly(db_session: Session,
+                              employee_id: Optional[int] = None,
+                              full_name: Optional[str] = None,
+                              contact_number: Optional[str] = None,
+                              company_id: Optional[int] = None,
+                              role_id: Optional[int] = None,
+                              work_policy_id: Optional[int] = None,
+                              office_location_id: Optional[int] = None,
+                              department_id: Optional[int] = None,
+                              reporting_manager_id: Optional[int] = None,
+                              first_name: Optional[str] = None,
+                              middle_name: Optional[str] = None,
+                              last_name: Optional[str] = None,
+                              emailId: Optional[str] = None,
+                              designation: Optional[str] = None,
+                              dateOfJoining: Optional[str] = None,
+                              dateOfBirth: Optional[str] = None,
+                              gender: Optional[str] = None,
+                              home_latitude: Optional[float] = None,
+                              home_longitude: Optional[float] = None,
+                              allow_site_checkin: Optional[bool] = None,
+                              restrict_to_allowed_locations: Optional[bool] = None,
+                              reminders: Optional[bool] = None,
+                              is_hr: Optional[bool] = None,
+                              hr_scope: Optional[str] = None,
+                              group_id: Optional[int] = None,
+                              created_by: Optional[int] = None
+
+                              ) -> Dict[str, Any]:
+        """
+        Add a new employee directly to the database
+        """
+        try:
+            # Create a new employee record
+            new_employee = Employee(
+                # Name fields
+                employeeId=employee_id,
+                first_name=first_name,
+                middle_name=middle_name,
+                last_name=last_name,
+                name=full_name,  # Keep full_name for legacy support
+                
+                # Contact information
+                emailId=emailId,
+                contactNo=contact_number,
+                
+                # Job details
+                designation=designation,
+                dateOfJoining=dateOfJoining,
+                dateOfBirth=dateOfBirth,
+                gender=gender,
+                
+                # Location information
+                office_location_id=office_location_id,
+                home_latitude=home_latitude,
+                home_longitude=home_longitude,
+                
+                # Work policy
+                work_policy_id=work_policy_id,
+                
+                # Company and hierarchy
+                company_id=company_id,
+                group_id=group_id,
+                reporting_manager_id=reporting_manager_id,
+                
+                # Role and department
+                role_id=role_id,
+                department_id=department_id,
+                
+                # HR permissions
+                is_hr=is_hr if is_hr is not None else False,
+                hr_scope=hr_scope if hr_scope else "company",
+                
+                # Work settings
+                allow_site_checkin=allow_site_checkin if allow_site_checkin is not None else False,
+                restrict_to_allowed_locations=restrict_to_allowed_locations if restrict_to_allowed_locations is not None else False,
+                reminders=reminders if reminders is not None else True,
+                
+                # Timestamps
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+                created_by=created_by
+            )
+
+            # Add the employee to the database
+            db_session.add(new_employee)
+            db_session.commit()
+
+            return {
+                "success": True,
+                "message": "Employee added successfully",
+                "employee_id": new_employee.id,
+                "employee_details": {
+                    "id": new_employee.id,
+                    "employeeId": new_employee.employeeId,
+                    "name": new_employee.name,
+                    "first_name": new_employee.first_name,
+                    "middle_name": new_employee.middle_name,
+                    "last_name": new_employee.last_name,
+                    "emailId": new_employee.emailId,
+                    "contactNo": new_employee.contactNo,
+                    "designation": new_employee.designation,
+                    "dateOfJoining": new_employee.dateOfJoining,
+                    "dateOfBirth": new_employee.dateOfBirth,
+                    "gender": new_employee.gender,
+                    "office_location_id": new_employee.office_location_id,
+                    "home_latitude": new_employee.home_latitude,
+                    "home_longitude": new_employee.home_longitude,
+                    "work_policy_id": new_employee.work_policy_id,
+                    "company_id": new_employee.company_id,
+                    "group_id": new_employee.group_id,
+                    "reporting_manager_id": new_employee.reporting_manager_id,
+                    "role_id": new_employee.role_id,
+                    "department_id": new_employee.department_id,
+                    "is_hr": new_employee.is_hr,
+                    "hr_scope": new_employee.hr_scope,
+                    "allow_site_checkin": new_employee.allow_site_checkin,
+                    "restrict_to_allowed_locations": new_employee.restrict_to_allowed_locations,
+                    "reminders": new_employee.reminders,
+                    "created_by": new_employee.created_by,
+                    "created_at": new_employee.created_at,
+                    "updated_at": new_employee.updated_at
+                }
+            }
+
+        except Exception as e:
+            db_session.rollback()
+            return {"success": False, "error": f"Error: {str(e)}"}
+        
+    @staticmethod
+    def get_employee_filetered_record(db_session: Session, contact_number: str):
+        #gets all the record of the employee based on their contact number
+        contact_number = None if contact_number is None else re.sub(r'[^\d]', '', str(contact_number))
+        try:
+            employee = db_session.query(Employee).filter(
+                Employee.contactNo == contact_number,
+                Employee.is_deleted == False
+            ).first()
+            if employee is None:
+                raise ValueError(f"No employee found with contact number: {contact_number}")
+            return employee
+        except Exception as e:
+            raise Exception(f"Error retrieving employee by contact number {contact_number}: {str(e)}")

@@ -1,7 +1,7 @@
 class AgentStates:
     def __init__(self):
         self.mandatory_fields = [
-            "full_name", "contact_number", "company_name","role", "reporting_manager_name","designation", "dateOfJoining", "dateOfBirth", "gender", "emailId"
+            "employee_id", "full_name", "contact_number", "company_name","role", "reporting_manager_name","designation", "dateOfJoining", "dateOfBirth", "gender", "emailId"
         ]
         self.optional_personal_fields = [
             # "emailId", "dateOfBirth", "gender"

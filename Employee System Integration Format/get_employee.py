@@ -27,6 +27,7 @@ def get_employee_records(contact_number: str, user_message: str):
     print(employee_info.company_id)
     employee_record = EmployeeProxy.get_employee_by_contact_number(contact_number=contact_number)
     print(f"Employee Record with names: {employee_record}")
+    print(f"Employee Record Contact Number: {employee_info.contactNo}")
     
 
     # Get the session ID from the database using the contact number
@@ -34,7 +35,8 @@ def get_employee_records(contact_number: str, user_message: str):
     session_messages = EmployeeSessionProxy.get_messages(contact_number)
     print(f"Session Messages: {session_messages}")
 
-    response = get_employee_search_extraction(session_messages, employee_record)
+    response = get_employee_search_extraction(session_messages, contact_number=contact_number)
+    print(response.model_dump(exclude_none=True))
     print(response.fields)
     print(f"All Fields Given: {response.all_fields_given}")
     if response.all_fields_given != True:
@@ -76,15 +78,17 @@ def get_employee_records(contact_number: str, user_message: str):
     print(f"All Results: {all_results}")
     print(f"User Message: {user_message}")
     print(f"Contact Number: {contact_number}")
-    response = sendLLMResponse(employee_info, generate_llm_response(employee_info.company_id, all_results, user_message, contact_number))
-    EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response)
-
+    # response = sendLLMResponse(employee_info, generate_llm_response(employee_info.company_id, all_results, user_message, contact_number))
+    print(f"Extraction Messages: {extraction_messages}")
+    response = get_employee_chat(extraction_messages[-1:], error_dict, employee_details=all_results)
+    EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
+    send_whatsapp_message(contact_number, response.message_to_user)
 
     clear_session(contact_number)
     EmployeeSessionProxy.clear_messages(contact_number)
-    EmployeeMessageHistoryProxy.clear_message_history(contact_number)
+    # EmployeeMessageHistoryProxy.clear_message_history(contact_number)
     return
 
 while True:
     user_input = input("User: ")
-    get_employee_records(contact_number="+971509876543", user_message=user_input)
+    get_employee_records(contact_number="+971512345678", user_message=user_input)

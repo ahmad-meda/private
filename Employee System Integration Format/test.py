@@ -112,17 +112,28 @@ import requests
 # employees = EmployeeProxy.get_all_active_employees()
 # print(employees)
 
-# from proxies.employee_session_proxy import EmployeeSessionProxy
+from proxies.employee_session_proxy import EmployeeSessionProxy
 
-# EmployeeSessionProxy.clear_asked_confirmation(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_employee_session(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_messages(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_asked_user_draft_continuation(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_list(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_update_agent_confirmation(contact_number="+971512345678")
-# EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
+EmployeeSessionProxy.clear_asked_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_employee_session(contact_number="+971512345678")
+EmployeeSessionProxy.clear_messages(contact_number="+971512345678")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
+EmployeeSessionProxy.clear_asked_user_draft_continuation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_list(contact_number="+971512345678")
+EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_update_agent_confirmation(contact_number="+971512345678")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971512345678")
+
+
+EmployeeSessionProxy.clear_asked_confirmation(contact_number="+971509784398")
+EmployeeSessionProxy.clear_employee_session(contact_number="+971509784398")
+EmployeeSessionProxy.clear_messages(contact_number="+971509784398")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971509784398")
+EmployeeSessionProxy.clear_asked_user_draft_continuation(contact_number="+971509784398")
+EmployeeSessionProxy.clear_list(contact_number="+971509784398")
+EmployeeSessionProxy.clear_employee_asked_confirmation(contact_number="+971509784398")
+EmployeeSessionProxy.clear_update_agent_confirmation(contact_number="+971509784398")
+EmployeeSessionProxy.clear_user_trying_to_add_new_employee(contact_number="+971509784398")
 
 
 # from helpers.user_record import update_user_record, get_huse_user_by_username
@@ -142,3 +153,70 @@ import requests
 
 
 # print(EmployeeSessionProxy.get_messages(contact_number="+971509784398"))
+
+
+# from datetime import datetime, timedelta
+# from proxies.proxy import EmployeeProxy
+# employee_record = EmployeeProxy.get_employee_draft_record_by_id(323)
+# current_time = datetime.now()
+# record_to_check_time = employee_record.updated_at
+# time_difference = current_time - record_to_check_time
+# print(f"Time difference: {time_difference}")
+# print(timedelta(minutes=30))
+
+# from Utils.choices import EmployeeChoices
+
+# from proxies.employee_choices_proxy import EmployeeChoicesProxy
+# print("office location choices",EmployeeChoicesProxy.get_office_location_choices())
+# print("company choices",EmployeeChoicesProxy.get_company_choices())
+# print("department choices",EmployeeChoicesProxy.get_department_choices())
+# print("role choices",EmployeeChoicesProxy.get_role_choices())
+# print("gender choices",EmployeeChoicesProxy.get_gender_choices())
+# print("work policy choices",EmployeeChoicesProxy.get_work_policy_choices())
+# print("group choices",EmployeeChoicesProxy.get_group_choices())
+
+
+"""You are HUSE, enhanced with retrieval-augmented generation capabilities, 
+at a multinational corporation. Your role involves understanding and processing employee queries 
+about company policies, benefits, leaves, code of conduct, and other HR-related matters. 
+You do this by extracting relevant entities and context from their questions.
+
+You will adhere to the following guidelines:
+
+1/ Generate responses that closely match the style and content of an HR representative.
+2/ Keep responses concise. If the query is vague like "elaborate", clarify the previous message.
+3/ Only use information from the knowledge base or context. Never hallucinate.
+4/ Use the user's past messages (below) for continuity.
+5/ Do not say you're retrieving from documents — speak as if you're the HR expert.
+
+Your job is to display the employee details in a friendly, casual way in whatsapp chat.
+
+        Using supporting knowledge, create a friendly, casual WhatsApp message to the user.
+
+        If Employee details are present, always treat it as a successful search.
+
+        If the user has provided any errors, inform them about the errors in a friendly way. This applies only if there are errors present.
+
+        If you have the information, do not say "I don't have that information" or "I cannot answer that at the moment."
+
+        Make sure to format the message in a way that is easy to read on WhatsApp, using line breaks and bullet points if necessary."""
+
+
+extra = (
+    """ Your job is to provide helpful responses based solely only on the employee information AND user's latest query in a friendly, casual WhatsApp chat format.
+
+                    The employee details provided are fetched based on the user's query, so use this information to answer in a way that fullfills their latest request in a friendly, casual WhatsApp message.
+
+                    If Employee details are present, always treat it as a successful search and use that information to provide relevant answers.
+
+                    If the user has provided any errors, inform them about the errors in a friendly way. This applies only if there are errors present.
+
+                    If you have the information, do not say "I don't have that information" or "I cannot answer that at the moment."
+
+                    Make sure to format the message in a way that is easy to read on WhatsApp, using line breaks and bullet points if necessary."""
+)
+
+
+errors = {
+    
+}

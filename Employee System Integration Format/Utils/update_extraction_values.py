@@ -1,8 +1,8 @@
-from Files.SQLAlchemyModels import EmployeeDraft
+from Files.SQLAlchemyModels import Employee
 from proxies.proxy import EmployeeProxy
 
 
-def get_filled_fields(record_to_check: EmployeeDraft):
+def get_filled_fields(record_to_check: Employee):
     company_name = None
     if record_to_check.company_id:
         company_obj = EmployeeProxy.get_company_by_id(record_to_check.company_id)
@@ -29,18 +29,17 @@ def get_filled_fields(record_to_check: EmployeeDraft):
         reporting_manager_name = manager_obj.name if manager_obj else None
     
     filled_fields = {
-        'employee_id': record_to_check.employee_id,
         'full_name': record_to_check.name,
-        'contact_number': record_to_check.contact_no,
-        'emailId': record_to_check.email_id,
+        'contact_number': record_to_check.contactNo,
+        'emailId': record_to_check.emailId,
         'company_name': company_name,
         'role': role_name,
         'office_location_name': office_location_name,
         'department_name': department_name,
         'reporting_manager_name': reporting_manager_name,
         'designation': record_to_check.designation,
-        'dateOfJoining': record_to_check.date_of_joining,
-        'dateOfBirth': record_to_check.date_of_birth,
+        'dateOfJoining': record_to_check.dateOfJoining,
+        'dateOfBirth': record_to_check.dateOfBirth,
         'gender': record_to_check.gender,
         'reminders': record_to_check.reminders,
         'is_hr': record_to_check.is_hr,

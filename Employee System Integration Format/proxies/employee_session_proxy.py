@@ -165,4 +165,25 @@ class EmployeeSessionProxy:
         """Clear correcting final confirmation changes status for a contact"""
         return cls._service.clear_correcting_final_confirmation_changes(contact_number)
 
+    # Field Confirmation Functions
+    @classmethod
+    def get_field_confirmation_list(cls, contact_number):
+        """Get all field-value pairs that were asked for confirmation"""
+        return cls._service.get_field_confirmation_list(contact_number)
+    
+    @classmethod
+    def add_field_to_confirmation_list(cls, contact_number, field_name, field_value):
+        """Add a field-value pair to the confirmation list"""
+        return cls._service.add_field_to_confirmation_list(contact_number, field_name, field_value)
+    
+    @classmethod
+    def remove_field_from_confirmation_list(cls, contact_number, field_name):
+        """Remove a specific field from the confirmation list"""
+        return cls._service.remove_field_from_confirmation_list(contact_number, field_name)
+    
+    @classmethod
+    def clear_field_confirmation_list(cls, contact_number):
+        """Clear all field confirmation data for a contact"""
+        return cls._service.clear_field_confirmation_list(contact_number)
+
     

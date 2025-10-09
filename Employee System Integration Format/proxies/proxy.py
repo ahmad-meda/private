@@ -186,6 +186,7 @@ class EmployeeProxy:
     
     @staticmethod
     def _adding_new_employee(employee_db_id: int,
+                            employee_id: str,
                             full_name: str, 
                             contact_number: str, 
                             company_name: str, 
@@ -211,11 +212,12 @@ class EmployeeProxy:
                             hr_scope: str,
                             hr_company_id: int,
                             hr_group_id: int,
-                            ):
+                                ):
         from app import app, db
         with app.app_context():
             return EmployeeService._adding_new_employee(db.session, 
                                                       employee_db_id, 
+                                                      employee_id,
                                                       full_name, contact_number, 
                                                       company_name, role, 
                                                       work_policy_name, 
@@ -239,6 +241,7 @@ class EmployeeProxy:
 
     @staticmethod
     def _update_employee_by_id(employee_db_id: int, 
+                               employee_id: str,
                                full_name: str, 
                                contact_number: str, 
                                company_name: str, 
@@ -268,6 +271,7 @@ class EmployeeProxy:
         with app.app_context():
             return EmployeeService._update_employee_by_id(db.session, 
                                                       employee_db_id, 
+                                                      employee_id,
                                                       full_name, contact_number, 
                                                       company_name, role, 
                                                       work_policy_name, 
@@ -596,4 +600,68 @@ class EmployeeProxy:
         from app import app, db
         with app.app_context():
             return EmployeeService.get_lead_record(db.session, lead_id)
+    
+    @staticmethod
+    def add_employee_directly(employee_id: int = None,
+                              full_name: str = None,
+                              contact_number: str = None,
+                              company_id: int = None,
+                              role_id: int = None,
+                              work_policy_id: int = None,
+                              office_location_id: int = None,
+                              department_id: int = None,
+                              reporting_manager_id: int = None,
+                              first_name: str = None,
+                              middle_name: str = None,
+                              last_name: str = None,
+                              emailId: str = None,
+                              designation: str = None,
+                              dateOfJoining: str = None,
+                              dateOfBirth: str = None,
+                              gender: str = None,
+                              home_latitude: float = None,
+                              home_longitude: float = None,
+                              allow_site_checkin: bool = None,
+                              restrict_to_allowed_locations: bool = None,
+                              reminders: bool = None,
+                              is_hr: bool = None,
+                              hr_scope: str = None,
+                              group_id: int = None,
+                              created_by: int = None):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.add_employee_directly(
+                db.session,
+                employee_id=employee_id,
+                full_name=full_name,
+                contact_number=contact_number,
+                company_id=company_id,
+                role_id=role_id,
+                work_policy_id=work_policy_id,
+                office_location_id=office_location_id,
+                department_id=department_id,
+                reporting_manager_id=reporting_manager_id,
+                first_name=first_name,
+                middle_name=middle_name,
+                last_name=last_name,
+                emailId=emailId,
+                designation=designation,
+                dateOfJoining=dateOfJoining,
+                dateOfBirth=dateOfBirth,
+                gender=gender,
+                home_latitude=home_latitude,
+                home_longitude=home_longitude,
+                allow_site_checkin=allow_site_checkin,
+                restrict_to_allowed_locations=restrict_to_allowed_locations,
+                reminders=reminders,
+                is_hr=is_hr,
+                hr_scope=hr_scope,
+                group_id=group_id,
+                created_by=created_by
+            )
    
+    @staticmethod
+    def get_employee_filetered_record(contact_number: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employee_filetered_record(db.session, contact_number)
