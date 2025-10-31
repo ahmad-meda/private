@@ -82,7 +82,7 @@ def extract_data(messages, list_of_fields: dict, company_choices:list, role_choi
 
                 From this conversation, only extract the fields that are empty and the fields that are provided by the user.
                 
-                IMPORTANT: Only extract NEW information that the user is providing in their current message.
+                VERY IMPORTANT: Only extract NEW information that the user is providing in their current message. Never hallucinate.
                 Date format: YYYY-MM-DD
                 Name format: Professional case (First Last)
                 """
@@ -175,7 +175,7 @@ def update_employee_extraction(messages:list):
             "content": (
                     """You are a data extraction assistant being used to update an employee in the db. 
                     You are supposed to extract only the NEW data the user wants to update.Do not extract the data the user has provided to identify the employee.
-                    From this conversation, extract the confirmed employee new details as structured data.
+                    From this conversation, extract the confirmed employee new details as structured data. Never hallucinate.
                     
                     FIELD HANDLING:
                     - full_name: Complete employee name as provided
@@ -205,7 +205,7 @@ def update_employee_extraction(messages:list):
                     FORMATTING RULES:
                     - Dates in postgres format (YYYY-MM-DD)
                     - Names in professional format (upper and lower case)
-                    - Extract only fields that the user explicitly wants to update
+                    - Extract only fields that the user explicitly wants to update. Never hallucinate.
                     """
             )
         }
@@ -251,7 +251,7 @@ def locate_update_employee(messages:list):
         {
             "role": "system",
             "content": (
-                """ You are a data extraction assistant used for extracting the employee exsiting details name or phone number so that his details can be updated.
+                """ You are a data extraction assistant used for extracting the employee existing details name or phone number so that his details can be updated.
                 """
             )
         }
@@ -264,7 +264,7 @@ def locate_update_employee(messages:list):
     )
     return completion.choices[0].message.parsed
     
-def get_employee_search_extraction(messages: list, contact_number: str):
+def get_employee_search_extraction(messages: list, employee_record: Employee):
     
     system_message = [
         {
@@ -273,7 +273,7 @@ def get_employee_search_extraction(messages: list, contact_number: str):
                 f"""
                 You are an expert in extracting employee search criteria from user messages.
 
-                these are the details of the employee chatting with you: {contact_number}
+                these are the details of the employee chatting with you: {employee_record.contactNo}, and the name: {employee_record.name}
                 
                 TASK: Extract employee search information from user messages and return them as a structured search object.
                 
@@ -380,6 +380,9 @@ def get_employee_search_extraction(messages: list, contact_number: str):
                 Input: "what is my manager", "my manager", "who is my manager", "my reporting manager"
                 Output: {{"fields": [{{"field_name": "contactNo", "field_value": "[extract the number from 'Contact Number: [number]' in employee_record]"}}], "all_fields_given": true, "message_to_user": ""}}
                 
+                Input: "pls give me all employees reporting to me", "show me my team", "who reports to me", "my direct reports"
+                Output: {{"fields": [{{"field_name": "reporting_manager_name", "field_value": "{employee_record.name}"}}], "all_fields_given": true, "message_to_user": ""}}
+                
                 FIELD MAPPING GUIDE:
                 - Name variations: "Ahmad Meda", "John Smith" → "name"
                 - Department: "Engineering", "HR", "Sales" → "department_name"  
@@ -425,11 +428,13 @@ def get_employee_chat(messages: list, error_dict: dict, employee_details: str):
             "role": "system",
             "content": (
                 f"""
-                The employee has asked for a READ operation on the employee details. You are an agent who will display the fetched details to the user as given based on his query: {employee_details}
-
-                These are the fetched details: {employee_details}, and sometimes there is an error: {error_dict}.
+                The employee has asked for a READ operation on the employee details. You are an agent who will display the fetched details to the user as given based on his query: {employee_details} as a fiendly, no emoji, professional message that is being displayed in whatsapp.
 
                 Here is the users query: {messages}
+                These are the fetched details which need to be displayed along with the fields with no value: {employee_details}
+                These are the error details, sometimes there is an error which needs to be informed to the user: {error_dict}
+
+                If the employes fetched number more than 10 then tell the user to access the full list at huse.app/employees in whatsapp format.
 
                 IMPORTANT: The system uses fuzzy matching to find results, so if the user typed something with typos or slight variations (like "software enginner" instead of "Software Engineer"), the search will still find matching employees. If employee details are provided, it means the search was SUCCESSFUL regardless of minor spelling differences.
 

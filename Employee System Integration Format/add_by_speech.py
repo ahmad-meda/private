@@ -1,0 +1,1 @@
+def speech_to_text(audio_file: str) -> str:

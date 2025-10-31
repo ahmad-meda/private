@@ -74,6 +74,8 @@ def update_employee_fields(contact_number:str, user_message:str):
 
     if employee_identified is False:
         extracted_current_data = locate_update_employee(messages=session_messages)
+        print("-------------------------------------------------------Added self mechanism.")
+        print(f"Extracted Current Data: {extracted_current_data}")
 
      # Extracted data after the employee has been identified.
     extracted_data = update_employee_extraction(messages=session_messages[-2:])
@@ -130,12 +132,12 @@ def update_employee_fields(contact_number:str, user_message:str):
                                                     employee_id=extracted_data.employee_id if "employee_id" in confirmed_fields else None,
                                                     full_name=extracted_data.full_name if "full_name" in confirmed_fields else None, 
                                                     contact_number=extracted_data.contact_number if "contact_number" in confirmed_fields else None,
-                                                    company_name=extracted_data.company_name if "company_name" in confirmed_fields else None, 
-                                                    role=extracted_data.role if "role" in confirmed_fields else None, 
+                                                    company_name=find_best_match(user_input=extracted_data.company_name, choices=EmployeeChoices.get_companies_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=85) if "company_name" in confirmed_fields else None, 
+                                                    role=find_best_match(user_input=extracted_data.role, choices=EmployeeChoices.get_role_choices(), threshold=90) if "role" in confirmed_fields else None, 
                                                     work_policy_name=extracted_data.work_policy_name if "work_policy_name" in confirmed_fields else None, 
-                                                    office_location_name=extracted_data.office_location_name if "office_location_name" in confirmed_fields else None, 
-                                                    department_name=extracted_data.department_name if "department_name" in confirmed_fields else None, 
-                                                    reporting_manager_name=extracted_data.reporting_manager_name if "reporting_manager_name" in confirmed_fields else None, 
+                                                    office_location_name=find_best_match(user_input=extracted_data.office_location_name, choices=EmployeeChoices.get_office_location_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=90) if "office_location_name" in confirmed_fields else None, 
+                                                    department_name=find_best_match(user_input=extracted_data.department_name, choices=EmployeeChoices.get_departments_choices(), threshold=90) if "department_name" in confirmed_fields else None, 
+                                                    reporting_manager_name=find_best_match(user_input=extracted_data.reporting_manager_name, choices=EmployeeChoices.get_reporting_manager_choices(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=95) if "reporting_manager_name" in confirmed_fields else None, 
                                                     first_name=extracted_data.first_name if "first_name" in confirmed_fields else None, 
                                                     middle_name=extracted_data.middle_name if "middle_name" in confirmed_fields else None, 
                                                     last_name=extracted_data.last_name if "last_name" in confirmed_fields else None, 
@@ -143,7 +145,7 @@ def update_employee_fields(contact_number:str, user_message:str):
                                                     designation=extracted_data.designation if "designation" in confirmed_fields else None, 
                                                     dateOfJoining=extracted_data.dateOfJoining if "dateOfJoining" in confirmed_fields else None, 
                                                     dateOfBirth=extracted_data.dateOfBirth if "dateOfBirth" in confirmed_fields else None, 
-                                                    gender=extracted_data.gender if "gender" in confirmed_fields else None, 
+                                                    gender=find_best_match(user_input=extracted_data.gender, choices=EmployeeChoices.get_gender_choices(), threshold=90) if "gender" in confirmed_fields else None, 
                                                     home_latitude=extracted_data.home_latitude if "home_latitude" in confirmed_fields else None, 
                                                     home_longitude=extracted_data.home_longitude if "home_longitude" in confirmed_fields else None,
                                                     allow_site_checkin=extracted_data.allow_site_checkin if "allow_site_checkin" in confirmed_fields else None,
@@ -181,6 +183,7 @@ def update_employee_fields(contact_number:str, user_message:str):
             print(f"Fields with without value: {list_of_fields_with_no_value}")
             print("--------------------------------")
 
+            print(f"Extracted Fields and Values: {extracted_fields_and_values}")
             print(f"Error Dict: {error_dict}")
 
             print(f"Confirmed Fields: {confirmed_fields}")
@@ -240,6 +243,13 @@ def update_employee_fields(contact_number:str, user_message:str):
     # If there are multiple employees with the same name, we pass in the error dict to the llm, this contains the email, number and name of all the matching employees.
     # These choices are then presented to the user to select the correct employee, this is done in the locate_update_employee function.
     if employee_id is None:
+
+        if extracted_current_data.is_user_trying_to_update_his_details:
+            employee_id = employee_record.id
+            print(f"Self update mechanism. User ID: {employee_id}")
+            employee_identified = True
+            EmployeeSessionProxy.set_employee_identified(contact_number, True)
+            EmployeeSessionProxy.set_employee_id(contact_number, employee_id)
 
         # If the employee name is extracted, we need to find the best match for the employee name.
         if extracted_current_data.current_name and employee_identified == False:
@@ -318,6 +328,20 @@ def update_employee_fields(contact_number:str, user_message:str):
             # Format the fields with values for confirmation
             fields_display = []
             for field, value in if_fields_present.items():
+                # Apply fuzzy logic to specific fields
+                if field == "gender" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_gender_choices(), threshold=90)
+                elif field == "company_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_companies_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=85)
+                elif field == "role" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_role_choices(), threshold=90)
+                elif field == "office_location_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_office_location_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=90)
+                elif field == "department_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_departments_choices(), threshold=90)
+                elif field == "reporting_manager_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_reporting_manager_choices(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=95)
+                
                 fields_display.append(f"• *{field}*: {value}")
             
             # Format the fields without values
@@ -341,6 +365,20 @@ def update_employee_fields(contact_number:str, user_message:str):
             
             fields_display = []
             for field, value in if_fields_present.items():
+                # Apply fuzzy logic to specific fields
+                if field == "gender" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_gender_choices(), threshold=90)
+                elif field == "company_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_companies_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=85)
+                elif field == "role" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_role_choices(), threshold=90)
+                elif field == "office_location_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_office_location_choices(group_id=employee_record.group_id, company_id=employee_record.company_id), threshold=90)
+                elif field == "department_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_departments_choices(), threshold=90)
+                elif field == "reporting_manager_name" and value:
+                    value = find_best_match(user_input=value, choices=EmployeeChoices.get_reporting_manager_choices(hr_company_id=employee_record.company_id, hr_group_id=employee_record.group_id), threshold=95)
+                
                 fields_display.append(f"• *{field}*: {value}")
             
             confirmation_message = f"Are you sure you want to make the following changes to *{employee_name}*?\n\n" + "\n".join(fields_display)
@@ -368,6 +406,7 @@ def update_employee_fields(contact_number:str, user_message:str):
         EmployeeSessionProxy.add_message(contact_number, {"role": "assistant", "content": response.message_to_user})
         send_whatsapp_message(contact_number, response.message_to_user)
         print(f"chat_assistant: {response}")
+        return
 
 
 while True:

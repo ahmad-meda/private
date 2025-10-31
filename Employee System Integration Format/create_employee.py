@@ -17,6 +17,8 @@ from huse.backend import huse_update_employee_status, register_employee_in_huse
 from huse.email import send_huse_credentials_email
 from Utils.extraction_fields import get_filled_fields
 
+import re
+
 def create_employee(contact_number:str, user_message:str):
 
     print("Entered Create Employee")
@@ -431,12 +433,17 @@ def create_employee(contact_number:str, user_message:str):
             print("record_to_check.email_id", record_to_check.email_id)
 
             if record_to_check.name != None and "full_name" in given_fields:
-                EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
-                print("changing")
+                if record_to_check.name != extracted_data.full_name:
+                    EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+                    print("user trying to add new name..asking for draft continuation")
             elif record_to_check.contact_no != None and "contact_number" in given_fields:
-                EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+                if record_to_check.contact_no != re.sub(r'[^\d]', '', str(extracted_data.contact_number)):
+                    EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+                    print("user trying to add new contact number..asking for draft continuation")
             elif record_to_check.email_id != None and "emailId" in given_fields:
-                EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+                if record_to_check.email_id != extracted_data.emailId:
+                    EmployeeSessionProxy.set_user_trying_to_add_new_employee(contact_number, True)
+                    print("user trying to add new email id..asking for draft continuation")
 
             is_trying_to_add_new_employee = EmployeeSessionProxy.get_user_trying_to_add_new_employee(contact_number)
             print(f"Is trying to add new employee: {is_trying_to_add_new_employee}")

@@ -8,20 +8,41 @@ def safe_attr(obj, *attrs, default="N/A"):
 def clean_employee_fields(extraction_result):
     """
     Clean the extraction result and return simple field-value pairs for database queries
+    Handles both extraction patterns:
+    1. Separate field objects: [{"field_name": "emailId", "field_value": "email"}, {"field_name": "employeeId", "field_value": "EMP123"}]
+    2. Combined field objects: [{"field_name": "emailId", "field_value": "email", "fields": [{"employeeId": "EMP123"}]}]
     
     Args:
         extraction_result: The result from extract_employee_search_data()
     
     Returns:
-        List of tuples: [("name", "Ahmad"), ("name", "Sudheer")]
+        List of tuples: [("name", "Ahmad"), ("emailId", "email"), ("employeeId", "EMP123")]
     """
     cleaned_fields = []
+    seen_fields = set()  # Track seen field-value pairs to avoid duplicates
     
     for field_obj in extraction_result.fields:
-        cleaned_fields.append((
-            field_obj.field_name,
-            field_obj.field_value
-        ))
+        # Add the main field if not already seen
+        main_field = (field_obj.field_name, field_obj.field_value)
+        if main_field not in seen_fields:
+            cleaned_fields.append(main_field)
+            seen_fields.add(main_field)
+        
+        # Check if there are additional fields in the nested fields array
+        if hasattr(field_obj, 'fields') and field_obj.fields:
+            for nested_field in field_obj.fields:
+                # Extract all non-None fields from the nested field object
+                for attr_name in ['employeeId', 'name', 'emailId', 'designation', 'dateOfJoining', 
+                                'dateOfBirth', 'contactNo', 'gender', 'office_location_name', 
+                                'work_policy_name', 'home_latitude', 'home_longitude', 
+                                'company_name', 'group_name', 'reporting_manager_name', 
+                                'role_name', 'department_name', 'checked_in', 'checked_out']:
+                    attr_value = getattr(nested_field, attr_name, None)
+                    if attr_value is not None:
+                        nested_field_pair = (attr_name, attr_value)
+                        if nested_field_pair not in seen_fields:
+                            cleaned_fields.append(nested_field_pair)
+                            seen_fields.add(nested_field_pair)
     
     return cleaned_fields
 
@@ -58,4 +79,3 @@ def format_employee_details(employee):
         f"Gender: {safe_attr(employee, 'gender')}",
         f"Reporting Manager: {safe_attr(employee, 'reporting_manager', 'name')}",
     ])]
-

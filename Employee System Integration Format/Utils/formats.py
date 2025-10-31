@@ -8,32 +8,32 @@ class EmployeeAgent(BaseModel):
     message_to_user: str = ""
 
 
-class EmployeeData(BaseModel):
-    employee_id: Optional[str] = Field(description="This is the employee id of the employee to be added. Extract this if the user gives a employee id.")
-    full_name: Optional[str] = Field(description="This is the name of the employee to be added. Extract this if the user gives a first name or first and last name or first last and middle name.")
-    contact_number: Optional[str] = Field(description="This is the contact number of the employee to be added. Extract this if the user gives a contact number.")
-    first_name: Optional[str] = Field(description="This is the first name of the employee to be added. Extract this if the user gives a first name.")
-    last_name: Optional[str] = Field(description="This is the last name of the employee to be added. Extract this if the user gives a last name.")
-    middle_name: Optional[str] = Field(description="This is the middle name of the employee to be added. Extract this if the user gives a middle name.")
-    emailId: Optional[str] = Field(description="This is the email of the employee to be added. Extract this if the user gives an email.")
-    designation: Optional[str] = Field(description="This is the designation of the employee to be added. Extract this if the user gives a designation.")
-    dateOfJoining: Optional[str] = Field(description="This is the date of joining of the employee to be added. Extract this if the user gives a date of joining.")
-    dateOfBirth: Optional[str] = Field(description="This is the date of birth of the employee to be added. Extract this if the user gives a date of birth.")
-    gender: Optional[str] = Field(description=f"This is the gender of the employee to be added, can be Male or Female. Extract this if the user gives a gender.Here are the choices of the gender: {EmployeeChoicesProxy.get_gender_choices()}")
-    work_policy_name: Optional[str] = Field(description="This is the work policy of the employee to be added. Extract this if the user gives a work policy.")
-    home_latitude: Optional[float] = Field(description="This is the home latitude of the employee to be added. Extract this if the user gives a home latitude.")
-    home_longitude: Optional[float] = Field(description="This is the home longitude of the employee to be added. Extract this if the user gives a home longitude.")
-    office_location_name: Optional[str] = Field(description="The user can either provide the name of office location or provide the home coordinates(if they choose this then extract the office location as 'home_coordinates') or may refuse to give the office location (this is a privilege only for managers), so if they choose the manager-skip extract the office location as 'manager_skip'")
-    company_name: Optional[str] = Field(description=f"This is the company of the employee to be added. Extract this if the user gives a company.Here are the choices of the companies: {EmployeeChoicesProxy.get_company_choices()}")
-    role: Optional[str] = Field(description=f"This is the role of the employee to be added. Extract this if the user gives a role.Here are the choices of the roles: {EmployeeChoicesProxy.get_role_choices()}")
-    reporting_manager_name: Optional[str] = Field(description="This is the reporting manager of the employee to be added. Extract this if the user gives a reporting manager.")
-    department_name: Optional[str] = Field(description=f"This is the department of the employee to be added. Extract this if the user gives a department.Here are the choices of the departments: {EmployeeChoicesProxy.get_department_choices()}")
-    restrict_to_allowed_locations: Optional[bool] = Field(description="This is True if the user wants multiple office locations for the employee.")
-    allow_site_checkin: Optional[bool] = Field(description="This is True if the employee is allowed to check-in from any location otherwise False.")
-    reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out. Extract this if the user gives a reminder.")
-    is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
-    hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'. Extract this if the user gives a scope.")
-    multiple_office_locations_to_check_in: Optional[List[str]] = Field(description="This is a list of office locations to check-in from. The bot will ask the user the multiple office locations for the employee to checkin from. The user will give names of the office locations to check-in from.")
+# class EmployeeData(BaseModel):
+#     employee_id: Optional[str] = Field(description="This is the employee id of the employee to be added. Extract this if the user gives a employee id.")
+#     full_name: Optional[str] = Field(description="This is the name of the employee to be added. Extract this if the user gives a first name or first and last name or first last and middle name.")
+#     contact_number: Optional[str] = Field(description="This is the contact number of the employee to be added. Extract this if the user gives a contact number.")
+#     first_name: Optional[str] = Field(description="This is the first name of the employee to be added. Extract this if the user gives a first name.")
+#     last_name: Optional[str] = Field(description="This is the last name of the employee to be added. Extract this if the user gives a last name.")
+#     middle_name: Optional[str] = Field(description="This is the middle name of the employee to be added. Extract this if the user gives a middle name.")
+#     emailId: Optional[str] = Field(description="This is the email of the employee to be added. Extract this if the user gives an email.")
+#     designation: Optional[str] = Field(description="This is the designation of the employee to be added. Extract this if the user gives a designation.")
+#     dateOfJoining: Optional[str] = Field(description="This is the date of joining of the employee to be added. Extract this if the user gives a date of joining.")
+#     dateOfBirth: Optional[str] = Field(description="This is the date of birth of the employee to be added. Extract this if the user gives a date of birth.")
+#     gender: Optional[str] = Field(description=f"This is the gender of the employee to be added, can be Male or Female. Extract this if the user gives a gender.Here are the choices of the gender: {EmployeeChoicesProxy.get_gender_choices()}")
+#     work_policy_name: Optional[str] = Field(description="This is the work policy of the employee to be added. Extract this if the user gives a work policy.")
+#     home_latitude: Optional[float] = Field(description="This is the home latitude of the employee to be added. Extract this if the user gives a home latitude.")
+#     home_longitude: Optional[float] = Field(description="This is the home longitude of the employee to be added. Extract this if the user gives a home longitude.")
+#     office_location_name: Optional[str] = Field(description="The user can either provide the name of office location or provide the home coordinates(if they choose this then extract the office location as 'home_coordinates') or may refuse to give the office location (this is a privilege only for managers), so if they choose the manager-skip extract the office location as 'manager_skip'")
+#     company_name: Optional[str] = Field(description=f"This is the company of the employee to be added. Extract this if the user gives a company.Here are the choices of the companies: {EmployeeChoicesProxy.get_company_choices()}")
+#     role: Optional[str] = Field(description=f"This is the role of the employee to be added. Extract this if the user gives a role.Here are the choices of the roles: {EmployeeChoicesProxy.get_role_choices()}")
+#     reporting_manager_name: Optional[str] = Field(description="This is the reporting manager of the employee to be added. Extract this if the user gives a reporting manager.")
+#     department_name: Optional[str] = Field(description=f"This is the department of the employee to be added. Extract this if the user gives a department.Here are the choices of the departments: {EmployeeChoicesProxy.get_department_choices()}")
+#     restrict_to_allowed_locations: Optional[bool] = Field(description="This is True if the user wants multiple office locations for the employee.")
+#     allow_site_checkin: Optional[bool] = Field(description="This is True if the employee is allowed to check-in from any location otherwise False.")
+#     reminders: Optional[bool] = Field(description="This is True if the employee wants reminders for check-in and check-out. Extract this if the user gives a reminder.")
+#     is_hr: Optional[bool] = Field(description="This is True if the employee being added is an HR.")
+#     hr_scope: Optional[str] = Field(description="This is the scope of the HR. It can be 'company' or 'group'. Extract this if the user gives a scope.")
+#     multiple_office_locations_to_check_in: Optional[List[str]] = Field(description="This is a list of office locations to check-in from. The bot will ask the user the multiple office locations for the employee to checkin from. The user will give names of the office locations to check-in from.")
 
 class SoftDeleteExtraction(BaseModel):
     employee_name: Optional[str] = Field(description="The name of the single employee to be deleted.")
@@ -60,7 +60,7 @@ class UpdateEmployeeExtraction(BaseModel):
     dateOfBirth: Optional[str] = Field(description="This is the date of birth of the employee to update. Do not extract this if the user replies no to updating this field after confirmation.")
     gender: Optional[str] = Field(description="This is the gender of the employee to update. Do not extract this if the user replies no to updating this field after confirmation.")
     work_policy_name: Optional[str] = Field(description="This is the work policy of the employee to update. Do not extract this if the user replies no to updating this field after confirmation.")
-    home_latitude: Optional[float] = Field(description="This is the home latitude of the employee to update. Do not extract this if the user replies no to updating field after confirmation.")
+    home_latitude: Optional[float] = Field(description="This is the home latitude of the employee to update. Do not extract this  if the user replies no to updating field after confirmation.")
     home_longitude: Optional[float] = Field(description="This is the home longitude of the employee to update. Do not extract this if the user replies no to updating this field after confirmation.")
     office_location_name: Optional[str] = Field(description="This is the office location of the employee to update, the. Do not extract this if the user replies no to updating this field after confirmation.")
     company_name: Optional[str] = Field(description="This is the company of the employee to update. Do not extract this if the user replies no to updating this field after confirmation.")
@@ -76,6 +76,7 @@ class LocateUpdateEmployeeResponse(BaseModel):
     current_phone_number: Optional[str] = None
     current_name: Optional[str] = None
     current_email: Optional[str] = None #------------------------------ FIX THIS
+    is_user_trying_to_update_his_details: Optional[bool] = Field(description="This is True if the user is trying to update his own details for example, 'pls update my details..' then the boolean is true, if this is true then all other fields are none. This is False if the user is trying to update someone else's details.")
 
 class SkippedDetails(BaseModel):
     skipped_fields: Optional[List[str]] = None
@@ -100,6 +101,7 @@ class db_employee_fields(BaseModel):
     department_name: Optional[str] = None
     checked_in: Optional[str] = None
     checked_out: Optional[str] = None
+    username: Optional[str] = None
 
 class get_employee_fields(BaseModel):
     fields: List[db_employee_fields]

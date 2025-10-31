@@ -14,3 +14,10 @@ bcrypt
 requests
 pandas
 openpyxl
+# Speech Recognition Dependencies
+SpeechRecognition
+pocketsphinx
+pydub
+# Optional: For advanced speech recognition
+# openai-whisper
+# vosk

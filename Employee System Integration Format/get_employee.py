@@ -4,7 +4,8 @@ from Utils.sanitization import sanitize_messages
 from proxies.employee_message_proxy import EmployeeMessageHistoryProxy
 from proxies.proxy import EmployeeProxy
 from proxies.employee_session_proxy import EmployeeSessionProxy
-from Utils.dummy_functions import clear_session, send_whatsapp_message, sendLLMResponse, generate_llm_response
+from Utils.dummy_functions import clear_session, send_whatsapp_message
+import re
 
 def get_employee_records(contact_number: str, user_message: str):
 
@@ -35,7 +36,7 @@ def get_employee_records(contact_number: str, user_message: str):
     session_messages = EmployeeSessionProxy.get_messages(contact_number)
     print(f"Session Messages: {session_messages}")
 
-    response = get_employee_search_extraction(session_messages, contact_number=contact_number)
+    response = get_employee_search_extraction(session_messages, employee_record=employee_info)
     print(response.model_dump(exclude_none=True))
     print(response.fields)
     print(f"All Fields Given: {response.all_fields_given}")
@@ -55,13 +56,20 @@ def get_employee_records(contact_number: str, user_message: str):
     for i, criterion in enumerate(criteria_list, 1):
         result, error = EmployeeProxy.get_employee_by_criteria([criterion], employee_info.company_id, employee_info.group_id)
         if result:
-            # Add each employee result directly to the list
-            all_results.extend(result)
+            # Structure results by criterion
+            field_name, field_value = criterion
+            # If searching by contact number and it matches the user's contact, use "user_profile"
+            normalized_contact = None if contact_number is None else re.sub(r'[^\d]', '', str(contact_number))
+            if field_name == 'contactNo' and field_value == normalized_contact:
+                criterion_key = "user_profile"
+            else:
+                criterion_key = f"employees_with_{field_name}_{field_value}"
+            all_results.append({criterion_key: result})
             print(f"Criterion {i} ({criterion[0]}='{criterion[1]}'): Found {len(result)} employees")
         if error:
             error_dict.update(error)
     
-    print(f"TOTAL EMPLOYEES FOUND: {len(all_results)}")
+    print(f"TOTAL EMPLOYEES FOUND: {sum(len(list(result.values())[0]) for result in all_results)}")
 
     if len(all_results) == 0:
         no_employee_message = "I'm sorry, but I couldn't find any employees matching your search criteria. Please try adjusting your search parameters or contact your HR department for assistance."
@@ -79,7 +87,7 @@ def get_employee_records(contact_number: str, user_message: str):
     print(f"User Message: {user_message}")
     print(f"Contact Number: {contact_number}")
     # response = sendLLMResponse(employee_info, generate_llm_response(employee_info.company_id, all_results, user_message, contact_number))
-    print(f"Extraction Messages: {extraction_messages}")
+    # print(f"Extraction Messages: {extraction_messages}")
     response = get_employee_chat(extraction_messages[-1:], error_dict, employee_details=all_results)
     EmployeeMessageHistoryProxy.save_message(contact_number, "assistant", response.message_to_user)
     send_whatsapp_message(contact_number, response.message_to_user)

@@ -22,7 +22,7 @@ def get_huse_user_by_username(username):
         # Use the search functionality to find user by username
         url = f"{base_url}/api/Users"
         params = {
-            'PageSize': 10000,
+            'PageSize': 1000000,
             'SearchString': username,
             'SearchBy': 'Username'
         }

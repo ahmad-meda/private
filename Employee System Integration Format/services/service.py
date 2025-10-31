@@ -14,6 +14,7 @@ from sqlalchemy import func
 from Utils.contact_validation import is_valid_international
 from helpers.email_validation import get_all_emails_from_api
 from helpers.contact_validation import get_all_contacts_from_api
+from helpers.user_record import update_user_record
 
 class EmployeeService:
 
@@ -351,6 +352,14 @@ class EmployeeService:
             return group.id if group else None
         except Exception:
             return None
+
+    def get_company_id(name: str, db:Session) -> Optional[int]:
+        """Get company ID by name using SQLAlchemy ORM"""
+        try:
+            company = db.query(Company).filter(Company.name == name).first()
+            return company.id if company else None
+        except Exception:
+            return None
         
     @staticmethod
     def _adding_new_employee(db_session: Session,                                 
@@ -391,6 +400,13 @@ class EmployeeService:
             if not employee_draft:
                 error_dict['employee'] = 'Employee not found'
                 return {'success': False, 'errors': error_dict}
+            
+            # Validate email format using regex
+            if emailId is not None:
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, emailId):
+                    emailId = None
+                    error_dict['emailId'] = 'Invalid email format. Email must be in format: name@domain.extension'
             
             # Check for duplicate email (if emailId is being updated)
             if emailId is not None and emailId != employee_draft.email_id:
@@ -723,6 +739,13 @@ class EmployeeService:
                 error_dict['employee'] = 'Employee not found or has been deleted'
                 return {'success': False, 'errors': error_dict}
             
+            # Validate email format using regex
+            if emailId is not None:
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, emailId):
+                    emailId = None
+                    error_dict['emailId'] = 'Invalid email format. Email must be in format: name@domain.extension'
+            
             # Check for duplicate email (if emailId is being updated)
             if emailId is not None and emailId != employee.emailId:
                 existing_email = db_session.query(Employee).filter(
@@ -941,8 +964,38 @@ class EmployeeService:
             # Update the updated_at timestamp
             employee.updated_at = datetime.now()
             
-            # Commit the changes
+            # Commit the changes to database first
             db_session.commit()
+            
+            # Update Huse backend AFTER successful database commit
+            # Handle email and contact separately
+            # Only update if employee has a username (exists in Huse)
+            if employee.username:
+                # Update email in Huse if emailId was provided
+                if emailId is not None:
+                    print(f"\n📧 Updating email in Huse backend for username: {employee.username}")
+                    huse_email_result = update_user_record(
+                        username=employee.username,
+                        contact_number=None,
+                        email=emailId
+                    )
+                    if huse_email_result:
+                        print(f"✅ Successfully updated email in Huse backend")
+                    else:
+                        print(f"⚠️ Warning: Failed to update email in Huse backend")
+                
+                # Update contact in Huse if contact_number was provided
+                if contact_number is not None:
+                    print(f"\n📱 Updating contact in Huse backend for username: {employee.username}")
+                    huse_contact_result = update_user_record(
+                        username=employee.username,
+                        contact_number=f"+{contact_number}",
+                        email=None
+                    )
+                    if huse_contact_result:
+                        print(f"✅ Successfully updated contact in Huse backend")
+                    else:
+                        print(f"⚠️ Warning: Failed to update contact in Huse backend")
             
             return {'success': True, 'errors': {}}
             
@@ -1759,6 +1812,66 @@ class EmployeeService:
             return "", {"error": str(e)}
     
     @staticmethod
+    def get_employees_by_role_simple(db: Session, role_name: str):
+        """
+        Get all employees with the given role without company/group constraints.
+        Returns raw employee objects for maximum reusability.
+        """
+        try:
+            role_name = find_best_match(role_name, EmployeeService.get_role_choices(db), threshold=85)
+            print(f"Role Name: {role_name}")
+            role_id = EmployeeService.get_role_id_by_name(role_name, db)
+            if not role_id:
+                return [], {"error": f"Role '{role_name}' not found."}
+                
+            employees = db.query(Employee).filter(
+                Employee.role_id == role_id,
+                Employee.is_deleted == False
+            ).all()
+            
+            if not employees:
+                return [], {"error": f"No employees found with role '{role_name}'."}
+            
+            # Return raw employee objects for maximum reusability
+            return employees, {}
+        except Exception as e:
+            return [], {"error": str(e)}
+    
+    @staticmethod
+    def get_employees_by_role_employee_list(db: Session, role_name: str, company_id: int = None, group_id: int = None):
+        """
+        Get employees with the given role with company/group filtering.
+        Returns raw employee objects for maximum reusability.
+        """
+        try:
+            role_name = find_best_match(role_name, EmployeeService.get_role_choices(db), threshold=85)
+            print(f"Role Name: {role_name}")
+            role_id = EmployeeService.get_role_id_by_name(role_name, db)
+            if not role_id:
+                return [], {"error": f"Role '{role_name}' not found."}
+                
+            query = db.query(Employee).filter(
+                Employee.role_id == role_id,
+                Employee.is_deleted == False
+            )
+            
+            # Apply efficient database-level filtering
+            if group_id:
+                query = query.filter(Employee.group_id == group_id)
+            elif company_id:
+                query = query.filter(Employee.company_id == company_id)
+            
+            employees = query.all()
+            
+            if not employees:
+                return [], {"error": f"No employees found with role '{role_name}' in the specified filter."}
+            
+            # Return raw employee objects for maximum reusability
+            return employees, {}
+        except Exception as e:
+            return [], {"error": str(e)}
+    
+    @staticmethod
     def get_checked_in_employee_ids(db: Session, hr_company_id: int, group_id: int = None):
         """
         Get IDs of employees who are currently checked in (online) for a specific company or group
@@ -1876,7 +1989,7 @@ class EmployeeService:
                     query = query.filter(Employee.name.ilike(f"%{matched_name}%"))
                     
                 elif field == "employeeId":
-                    query = query.filter(Employee.employeeId == value)
+                    query = query.filter(Employee.employeeId.ilike(value))
                     
                 elif field == "emailId":
                     query = query.filter(Employee.emailId.ilike(f"%{value}%"))
@@ -1937,10 +2050,15 @@ class EmployeeService:
                     
                 elif field == "reporting_manager_name":
                     matched_manager = find_best_match(value, EmployeeService.get_reporting_manager_choices(db, hr_company_id, group_id), threshold=85)
-                    manager_id = EmployeeService.get_reporting_manager_id_by_name(matched_manager, hr_company_id, group_id, db)
-                    if not manager_id:
+                    # Get all managers with the same name to handle multiple managers with identical names
+                    if group_id is not None:
+                        managers = db.query(Employee).filter(Employee.name == matched_manager, Employee.group_id == group_id).all()
+                    else:
+                        managers = db.query(Employee).filter(Employee.name == matched_manager, Employee.company_id == hr_company_id).all()
+                    manager_ids = [manager.id for manager in managers] if managers else []
+                    if not manager_ids:
                         return "", {"error": f"Reporting manager '{value}' not found."}
-                    query = query.filter(Employee.reporting_manager_id == manager_id)
+                    query = query.filter(Employee.reporting_manager_id.in_(manager_ids))
                     
                 elif field == "role_name":
                     matched_role = find_best_match(value, EmployeeService.get_role_choices(db), threshold=85)
@@ -1960,17 +2078,24 @@ class EmployeeService:
                     
                 elif field == "employee_id":
                     # Filter by group first, if group is null then by company
+                    # Case-insensitive comparison for employee_id
                     if group_id is not None:
                         query = query.filter(
-                            Employee.employeeId == value,
+                            Employee.employeeId.ilike(value),
                             Employee.group_id == group_id
                         )
                     else:
                         query = query.filter(
-                            Employee.employeeId == value,
+                            Employee.employeeId.ilike(value),
                             Employee.company_id == hr_company_id
                         )
                     
+                elif field == "username":
+                    employee = EmployeeService.get_employee_by_username(db_session=db, username=value)
+                    if employee:
+                        query = query.filter(Employee.id == employee.id)
+                    else:
+                        return "", {"error": f"Employee with username '{value}' not found."}
                     
                 else:
                     return "", {"error": f"Unsupported criteria field: '{field}'"}
@@ -2197,6 +2322,37 @@ class EmployeeService:
             db.rollback()
             error_dict['general'] = f"An unexpected error occurred: {str(e)}"
             return {'success': False, 'errors': error_dict}
+
+    @staticmethod
+    def get_employee_by_username(db_session: Session, username: str, company_id: int = None, group_id: int = None):
+        """
+        Get employee record by username from the database with efficient filtering.
+        
+        Args:
+            db_session: SQLAlchemy database session
+            username: Username to search for
+            company_id: Optional company ID for filtering
+            group_id: Optional group ID for filtering
+            
+        Returns:
+            Employee object if found, None otherwise
+        """
+        try:
+            query = db_session.query(Employee).filter(
+                Employee.username == username,
+                Employee.is_deleted == False
+            )
+            
+            # Apply efficient database-level filtering
+            if group_id:
+                query = query.filter(Employee.group_id == group_id)
+            elif company_id:
+                query = query.filter(Employee.company_id == company_id)
+            
+            employee = query.first()
+            return employee
+        except Exception as e:
+            raise Exception(f"Error retrieving employee by username '{username}': {str(e)}")
 
     @staticmethod
     def check_username_exists(db_session: Session, username: str) -> bool:

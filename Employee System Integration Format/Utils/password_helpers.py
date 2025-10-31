@@ -48,11 +48,11 @@ def generate_password() -> str:
         random.choice(string.ascii_uppercase),  # Uppercase
         random.choice(string.ascii_lowercase),  # Lowercase
         random.choice(string.digits),           # Digit
-        random.choice("!@#$%^&*()_+-=[]{}|;:,.<>?")  # Special char
+        random.choice("!@#$%^&*_+-=|:,.?")  # Special char
     ]
     
     # Add more random characters to reach minimum length
-    all_chars = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    all_chars = string.ascii_letters + string.digits + "!@#$%^&*_+-=|:,.?"
     for _ in range(8):  # Total length will be 12
         password.append(random.choice(all_chars))
     

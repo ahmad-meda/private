@@ -152,7 +152,13 @@ class EmployeeProxy:
     def get_role_id_by_name(role_name: str):
         from app import app, db
         with app.app_context():
-            return EmployeeService.get_role_id_by_name(role_name, db.session)
+            return EmployeeService.get_role_id_by_name(role_name, db.session, hr_group_id, hr_company_id)
+
+    @staticmethod
+    def get_company_id(company_name: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_company_id(company_name, db.session)
     
     @staticmethod
     def get_work_policy_id_by_name(work_policy_name: str):
@@ -439,6 +445,18 @@ class EmployeeProxy:
             return EmployeeService.get_employee_by_role(db.session, role, hr_company_id, group_id)
     
     @staticmethod
+    def get_employees_by_role_simple(role: str):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employees_by_role_simple(db.session, role)
+    
+    @staticmethod
+    def get_employees_by_role_employee_list(role: str, company_id: int = None, group_id: int = None):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employees_by_role_employee_list(db.session, role, company_id, group_id)
+    
+    @staticmethod
     def get_checked_in_employees(hr_company_id: int, group_id: int = None):
         from app import app, db
         with app.app_context():
@@ -588,6 +606,12 @@ class EmployeeProxy:
         from app import app, db
         with app.app_context():
             return EmployeeService.get_all_usernames(db.session)
+    
+    @staticmethod
+    def get_employee_by_username(username: str, company_id: int = None, group_id: int = None):
+        from app import app, db
+        with app.app_context():
+            return EmployeeService.get_employee_by_username(db.session, username, company_id, group_id)
         
     @staticmethod
     def clear_employee_draft_fields(draft_id: int):
