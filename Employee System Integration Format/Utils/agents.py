@@ -214,7 +214,8 @@ def update_employee_extraction(messages:list):
     completion = client.beta.chat.completions.parse(
         model=model,
         messages=system_message,
-        response_format=UpdateEmployeeExtraction
+        response_format=UpdateEmployeeExtraction,
+        temperature=0.1
     )
 
     return completion.choices[0].message.parsed
